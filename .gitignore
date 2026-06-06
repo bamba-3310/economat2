@@ -1,0 +1,87 @@
+# =========================
+# Python / Django
+# =========================
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual env
+venv/
+env/
+ENV/
+.venv/
+
+# Django
+db.sqlite3
+media/
+staticfiles/
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.*
+!.env.example
+api/.env
+
+# Migrations compilées
+*.pyc
+
+# =========================
+# Node / React / Vite
+# =========================
+
+node_modules/
+
+dist/
+build/
+
+.vite/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# IDE
+# =========================
+
+.vscode/
+.idea/
+
+# =========================
+# OS
+# =========================
+
+.DS_Store
+Thumbs.db
+
+# =========================
+# Tests / Coverage
+# =========================
+
+.coverage
+htmlcov/
+.pytest_cache/
+
+coverage/
+*.lcov
+
+# =========================
+# PostgreSQL dumps
+# =========================
+
+*.sql
+*.dump
+*.backup
+
+# =========================
+# Temporary files
+# =========================
+
+*.tmp
+*.swp
+*.swo
