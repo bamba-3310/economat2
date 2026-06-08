@@ -1,4 +1,4 @@
-from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.db import models
 
 class UserRole(models.TextChoices):
@@ -21,7 +21,7 @@ class UserManager(BaseUserManager):
         return user
 
 
-class User(AbstractUser):
+class User(AbstractBaseUser):
     name = models.CharField(max_length=100)
     email = models.EmailField(max_length=150, unique=True)
     role = models.CharField(max_length=20, choices=UserRole.choices)
