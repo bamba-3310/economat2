@@ -24,7 +24,7 @@ python api/manage.py makemigrations accounts
 
 ### Create the first admin directly in shell
 ```bash
-python manage.py shell -c "
+python api/manage.py shell -c "
 from apps.accounts.models import User
 User.objects.create_user(
     email='admin@economat.sn',
