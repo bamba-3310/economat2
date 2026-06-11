@@ -5,9 +5,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import User
-from .serializers import LoginSerializer, UserSerializer, CreateUserSerializer
-from .permissions import IsAdmin
-
+from .serializers import LoginSerializer, UserSerializer, CreateUserSerializer, UpdateUserSerializer
+from apps.permissions import IsAdmin
 
 
 class LoginView(APIView):
@@ -59,6 +58,16 @@ class UserListCreateView(APIView):
 class UserDetailView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
+    def patch(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'detail': 'User does not exist'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = UpdateUserSerializer(user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(UserSerializer(user).data)
+
     def delete(self, request, pk):
         """Delete a user (Admin only, except oneself)"""
         if request.user.pk == pk:
@@ -69,7 +78,7 @@ class UserDetailView(APIView):
         except User.DoesNotExist:
             return Response({'detail': 'User does not exist'}, status=status.HTTP_404_NOT_FOUND)
         user.delete()
-        return Response({'detail': 'User deleted'}, status=status.HTTP_204_NO_CONTENT)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class MeView(APIView):

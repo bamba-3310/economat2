@@ -38,7 +38,10 @@ User.objects.create_user(
 ---
 ###
 
-## Curl commands
+# Curl commands
+###
+
+## User Management CURL commands
 ###
 
 ### Login
@@ -66,6 +69,26 @@ curl -s -X POST http://localhost:8000/api/accounts/register/ \
 ```
 ###
 
+### Modify a user
+```bash
+curl -s -X PATCH http://localhost:8000/api/accounts/<id>/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Marie Dupont","role":"cook"}' \
+  | python3 -m json.tool
+```
+###
+
+### Modify a password
+```bash
+curl -s -X PATCH http://localhost:8000/api/accounts/<id>/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"password":"newpassword123"}' \
+  | python3 -m json.tool
+```
+###
+
 ### Active user profile
 ```bash
 curl -s http://localhost:8000/api/accounts/me/ \
@@ -75,7 +98,7 @@ curl -s http://localhost:8000/api/accounts/me/ \
 
 ### Delete a user
 ```bash
-curl -s -X DELETE http://localhost:8000/api/accounts/id/ \
+curl -s -X DELETE http://localhost:8000/api/accounts/<id>/ \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 #### Example
@@ -91,3 +114,46 @@ curl -s -X POST http://localhost:8000/api/accounts/token/refresh/ \
   -H "Content-Type: application/json" \
   -d '{"refresh":"<paste_the_refresh_token>"}' | python -m json.tool
 ```
+#
+
+---
+
+###
+
+## Categories Management CURL commands
+###
+
+### List all categories
+```bash
+curl -s http://localhost:8000/api/categories/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### Create a category
+```bash
+curl -s -X POST http://localhost:8000/api/categories/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Légumes"}' \
+  | python3 -m json.tool
+```
+###
+
+### Modify a category
+```bash
+curl -s -X PATCH http://localhost:8000/api/categories/<id>/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Légumes frais"}' \
+  | python3 -m json.tool
+```
+###
+
+### Delete a category
+```bash
+curl -s -X DELETE http://localhost:8000/api/categories/<id>/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+###
