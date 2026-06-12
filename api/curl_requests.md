@@ -156,4 +156,46 @@ curl -s -X PATCH http://localhost:8000/api/categories/<id>/ \
 curl -s -X DELETE http://localhost:8000/api/categories/<id>/ \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
+#
+
+---
+
 ###
+
+## Suppliers Management CURL commands
+###
+
+### List all suppliers
+```bash
+curl -s http://localhost:8000/api/suppliers/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### Create a supplier
+```bash
+curl -s -X POST http://localhost:8000/api/suppliers/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Sosapen", "phone":""}' \
+  | python3 -m json.tool
+```
+###
+
+### Modify a supplier
+```bash
+curl -s -X PATCH http://localhost:8000/api/suppliers/<id>/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Légumes frais"}' \
+  | python3 -m json.tool
+```
+###
+
+### Delete a category
+```bash
+curl -s -X DELETE http://localhost:8000/api/suppliers/<id>/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+#
