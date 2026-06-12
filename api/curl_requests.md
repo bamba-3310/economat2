@@ -199,3 +199,44 @@ curl -s -X DELETE http://localhost:8000/api/suppliers/<id>/ \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 #
+
+---
+
+###
+
+## Articles Management CURL commands
+###
+
+### List all articles
+```bash
+curl -s http://localhost:8000/api/articles/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### Create an articles
+```bash
+curl -s -X POST http://localhost:8000/api/articles/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Tomates","category":1,"unit":"kg","sale_price":0,"stock_quantity":0,"min_threshold":5}' \
+  | python3 -m json.tool
+```
+###
+
+### Modify an articles
+```bash
+curl -s -X PATCH http://localhost:8000/api/articles/<id>/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"sale_price":1550,"stock_quantity":30}' \
+  | python3 -m json.tool
+```
+###
+
+### Delete an article
+```bash
+curl -s -X DELETE http://localhost:8000/api/articles/<id>/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```

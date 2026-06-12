@@ -6,6 +6,6 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ['id', 'name']
 
-        def create(self, validated_data):
-            return Category.objects.create(**validated_data)
+    def create(self, validated_data):
+        return Category.objects.create(**validated_data)
 

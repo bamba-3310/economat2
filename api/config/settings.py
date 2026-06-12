@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.categories',
     'apps.suppliers',
+    'apps.articles',
 ]
 
 # Before any migration
