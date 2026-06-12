@@ -9,3 +9,6 @@ class Article(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     category = models.ForeignKey('categories.Category', on_delete=models.PROTECT, related_name='articles')
+
+    class Meta:
+        db_table = 'articles'
