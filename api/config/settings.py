@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'apps.categories',
     'apps.suppliers',
     'apps.articles',
+    'apps.batches'
 ]
 
 # Before any migration

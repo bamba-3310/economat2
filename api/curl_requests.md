@@ -240,3 +240,46 @@ curl -s -X PATCH http://localhost:8000/api/articles/<id>/ \
 curl -s -X DELETE http://localhost:8000/api/articles/<id>/ \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
+#
+
+---
+
+###
+
+## Batches Management CURL commands
+###
+
+### List all batches
+```bash
+curl -s http://localhost:8000/api/batches/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### Create a batch
+```bash
+curl -s -X POST http://localhost:8000/api/batches/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"article":3, "supplier":1, "purchase_price":1550, "expiry_date":"2026-06-15", "qr_code_path":"/qr_code/tomates/"}' \        
+  | python3 -m json.tool
+```
+###
+
+### Modify a batch
+```bash
+curl -s -X PATCH http://localhost:8000/api/batches/<id>/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"expiry_date":"2026-06-31","quantity":30}' \
+  | python3 -m json.tool
+```
+###
+
+### Delete a batch
+```bash
+curl -s -X DELETE http://localhost:8000/api/batches/<id>/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+#
