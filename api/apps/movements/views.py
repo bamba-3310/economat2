@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 
+from apps.alerts.utils import check_stock_threshold
 from .models import Movement
 from .serializers import MovementSerializer
 from apps.permissions import IsAdminOrEconome
@@ -53,6 +54,9 @@ class MovementListCreateView(APIView):
 
         # Inject the connected user automatically
         movement = serializer.save(user=request.user)
+
+        # Check the threshold after each movement
+        check_stock_threshold(article)
 
         return Response(MovementSerializer(movement).data, status=status.HTTP_201_CREATED)
 

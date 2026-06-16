@@ -22,6 +22,14 @@ class BatchListCreateView(APIView):
         """Create a batches (Admin/Econome)"""
         serializer = BatchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        article = serializer.validated_data['article']
+
+        # Calculates expiry_date automatically if the article has a conservation duration
+        extra = {}
+        if article.shelf_life_days and 'expiry_date' not in request.data:
+            extra['expiry_date'] = timezone.now().date() + timedelta(days=article.shelf_life_days)
+
         batch = serializer.save()
         return Response(BatchSerializer(batch).data, status=status.HTTP_201_CREATED)
 

@@ -6,6 +6,7 @@ class Article(models.Model):
     sale_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     stock_quantity = models.PositiveIntegerField(default=0)
     min_threshold = models.PositiveIntegerField(default=0)
+    shelf_life_days = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     category = models.ForeignKey('categories.Category', on_delete=models.PROTECT, related_name='articles')

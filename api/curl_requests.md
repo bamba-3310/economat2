@@ -328,6 +328,52 @@ curl -s "http://localhost:8000/api/movements/?article=1" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   | python3 -m json.tool --no-ensure-ascii
 ```
+#
+
+---
+
 ###
 
+## Alerts Management CURL commands
+###
+
+### List all alerts
+```bash
+curl -s http://localhost:8000/api/alerts/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### List unread alerts
+```bash
+curl -s "http://localhost:8000/api/alerts/?unread=true" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### Filter alerts by type
+```bash
+curl -s "http://localhost:8000/api/alerts/?type=threshold" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### Mark an alert as read
+```bash
+curl -s -X PATCH http://localhost:8000/api/alerts/<id>/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool
+
+```
+###
+
+### Mark all alerts as read
+```bash
+curl -s -X POST http://localhost:8000/api/alerts/read-all/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool
+```
 #

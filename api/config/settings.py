@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'apps.articles',
     'apps.batches',
     'apps.movements',
+    'apps.alerts',
 ]
 
 # Before any migration
