@@ -283,3 +283,51 @@ curl -s -X DELETE http://localhost:8000/api/batches/<id>/ \
   -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 #
+
+---
+
+###
+
+## Movements Management CURL commands
+###
+
+### List all Movements
+```bash
+curl -s http://localhost:8000/api/movements/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### Create a Movement
+###
+
+#### Stock Entry
+```bash
+curl -s -X POST http://localhost:8000/api/movements/ \     
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"article":1,"lot":1,"type":"entry","quantity":100,"motive":"Livraison semaine 24"}' \
+  | python3 -m json.tool
+```
+###
+
+#### Stock Exit
+```bash
+curl -s -X POST http://localhost:8000/api/movements/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \                                          
+  -H "Content-Type: application/json" \
+  -d '{"article":1,"type":"kitchen_exit","quantity":5,"motive":"Service du midi"}' \
+  | python3 -m json.tool
+```
+###
+
+#### Stock Filter by article
+```bash
+curl -s "http://localhost:8000/api/movements/?article=1" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+#
