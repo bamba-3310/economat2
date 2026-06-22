@@ -39,18 +39,31 @@ class MovementListCreateView(APIView):
         quantity = serializer.validated_data['quantity']
         movement_type = serializer.validated_data['type']
 
-        # Update the stock depending on the type
+        # WHEN/WHY: the new 'activation' (lot reserve -> in service) and
+        # 'correction' movement types must NOT auto add/subtract the article
+        # stock here — activation changes no quantity, and corrections are
+        # reconciled explicitly by the caller (batch + article stock are set to
+        # the corrected value). The original code treated every non-'entry' type
+        # as a subtraction, which would be wrong for these two.
+        # Previous code:
+        #   if movement_type == 'entry':
+        #       article.stock_quantity += quantity
+        #   else:
+        #       if article.stock_quantity < quantity: return Response({...})
+        #       article.stock_quantity -= quantity
+        #   article.save()
         if movement_type == 'entry':
             article.stock_quantity += quantity
-        else:
-            # Exit, loss - verify if there's enough stock
+            article.save()
+        elif movement_type in ('kitchen_exit', 'loss', 'deletion'):
             if article.stock_quantity < quantity:
                 return Response(
                     {'detail': f'Move not enough stock. Available stock is {article.stock_quantity}'},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
             article.stock_quantity -= quantity
-
-        article.save()
+            article.save()
+        # 'activation' / 'correction': no automatic stock change (logged only).
 
         # Inject the connected user automatically
         movement = serializer.save(user=request.user)

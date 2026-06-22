@@ -9,7 +9,9 @@ class LoginSerializer(serializers.Serializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'name', 'email', 'role', 'created_at']
+        # WHEN/WHY: surfaced status + permissions for the frontend users panel,
+        # then photo_url for the avatar. Originally id/name/email/role/created_at.
+        fields = ['id', 'name', 'email', 'role', 'status', 'permissions', 'photo_url', 'is_active', 'created_at']
 
 
 class CreateUserSerializer(serializers.ModelSerializer):
@@ -17,10 +19,25 @@ class CreateUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['name', 'email', 'password', 'role']
+        # WHEN/WHY: accept status + permissions on creation (admin create and
+        # self-registration). Previously: fields = ['name', 'email', 'password', 'role'].
+        fields = ['name', 'email', 'password', 'role', 'status', 'permissions']
+        extra_kwargs = {'status': {'required': False}, 'permissions': {'required': False}}
 
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)
+
+
+class SelfUpdateSerializer(serializers.ModelSerializer):
+    # WHY: a non-admin must be able to edit their OWN profile (name/email/avatar)
+    # without being able to escalate. Admin-only editing of other users (role,
+    # status, permissions, is_active) stays on UpdateUserSerializer. Limiting the
+    # field set here is the security boundary: role/status/permissions sent by a
+    # self-edit are silently ignored, never written. WHEN: added with the
+    # self-service profile fix (CODE_REVIEW_PLAN #1).
+    class Meta:
+        model = User
+        fields = ['name', 'email', 'photo_url']
 
 
 class UpdateUserSerializer(serializers.ModelSerializer):
@@ -28,7 +45,9 @@ class UpdateUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['name', 'email', 'password', 'role', 'is_active']
+        # WHEN/WHY: allow editing status + permissions (approve/reject/disable +
+        # per-user rights) and the avatar (photo_url). Previously: [..., 'role', 'is_active'].
+        fields = ['name', 'email', 'password', 'role', 'is_active', 'status', 'permissions', 'photo_url']
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)

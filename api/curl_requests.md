@@ -35,6 +35,15 @@ User.objects.create_user(
 ```
 ###
 
+### Reset stuck single-session locks (after an unclean shutdown)
+```bash
+python api/manage.py reset_sessions                 # all users
+python api/manage.py reset_sessions --email admin@economat.sn
+```
+> Login now uses takeover semantics (newest login wins) and idle sessions free
+> themselves after SESSION_IDLE_MINUTES, so this is only an escape hatch.
+###
+
 ---
 ###
 
@@ -92,6 +101,23 @@ curl -s -X PATCH http://localhost:8000/api/accounts/<id>/ \
 ### Active user profile
 ```bash
 curl -s http://localhost:8000/api/accounts/me/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" | python -m json.tool
+```
+###
+
+### Change own password (verifies current password)
+```bash
+curl -s -X POST http://localhost:8000/api/accounts/change-password/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"current_password":"secret123","new_password":"newpassword123"}' \
+  | python3 -m json.tool
+```
+###
+
+### Logout (clears the single active session)
+```bash
+curl -s -X POST http://localhost:8000/api/accounts/logout/ \
   -H "Authorization: Bearer $ACCESS_TOKEN" | python -m json.tool
 ```
 ###
@@ -188,12 +214,12 @@ curl -s -X POST http://localhost:8000/api/suppliers/ \
 curl -s -X PATCH http://localhost:8000/api/suppliers/<id>/ \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"Légumes frais"}' \
+  -d '{"name":"Sosapen","phone":"771234567","email":"contact@sosapen.sn"}' \
   | python3 -m json.tool
 ```
 ###
 
-### Delete a category
+### Delete a supplier
 ```bash
 curl -s -X DELETE http://localhost:8000/api/suppliers/<id>/ \
   -H "Authorization: Bearer $ACCESS_TOKEN"
@@ -375,5 +401,102 @@ curl -s -X PATCH http://localhost:8000/api/alerts/<id>/ \
 curl -s -X POST http://localhost:8000/api/alerts/read-all/ \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   | python3 -m json.tool
+```
+#
+
+---
+
+###
+
+## Deliveries Management CURL commands
+###
+> Validating a delivery is atomic: each line creates a batch + an entry movement
+> (and the article if it does not exist yet), bumps the article stock, and
+> re-checks thresholds. POST requires the `admin` or `econome` role.
+###
+
+### List all deliveries
+```bash
+curl -s http://localhost:8000/api/deliveries/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### Validate a delivery (existing articles)
+```bash
+curl -s -X POST http://localhost:8000/api/deliveries/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reference":"BL-2026-014",
+    "supplier":1,
+    "delivered_at":"2026-06-17",
+    "lines":[
+      {"article":1,"quantity":100,"lot_code":"LOT-A","expiry_date":"2026-07-30"},
+      {"article":3,"quantity":40,"lot_code":"LOT-B"}
+    ]
+  }' \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### Validate a delivery (creating a new article on the fly)
+```bash
+curl -s -X POST http://localhost:8000/api/deliveries/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reference":"BL-2026-015",
+    "supplier":1,
+    "lines":[
+      {"product_name":"Oignons","category":1,"unit":"kg","threshold":5,"quantity":60,"lot_code":"LOT-C"}
+    ]
+  }' \
+  | python3 -m json.tool --no-ensure-ascii
+```
+#
+
+---
+
+###
+
+## System CURL commands (branding + maintenance)
+###
+
+### Get the restaurant name (public, no auth)
+```bash
+curl -s http://localhost:8000/api/system/branding/ | python3 -m json.tool --no-ensure-ascii
+# -> {"name": "...", "default_name": "Cuistock", "is_custom": false}
+```
+###
+
+### Set a custom restaurant name (admin)
+```bash
+curl -s -X PATCH http://localhost:8000/api/system/branding/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Le Bistrot du Port"}' \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### Restore the default restaurant name (admin)
+```bash
+curl -s -X PATCH http://localhost:8000/api/system/branding/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"restore":true}' \
+  | python3 -m json.tool --no-ensure-ascii
+```
+###
+
+### Wipe the database, keeping admin accounts (admin)
+```bash
+curl -s -X POST http://localhost:8000/api/system/wipe/ \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  | python3 -m json.tool
+# Deletes all products/lots/movements/deliveries/categories/suppliers/alerts
+# and non-admin users. Admin accounts and the branding row are kept.
 ```
 #

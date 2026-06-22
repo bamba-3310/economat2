@@ -39,6 +39,7 @@ dist/
 build/
 
 .vite/
+.next/
 
 npm-debug.log*
 yarn-debug.log*
@@ -75,6 +76,7 @@ coverage/
 # =========================
 
 *.sql
+!db/database.sql
 *.dump
 *.backup
 
@@ -85,3 +87,8 @@ coverage/
 *.tmp
 *.swp
 *.swo
+
+UPGRADE_TRACKER.md
+CODE_REVIEW_PLAN.md
+interface.md
+.claude

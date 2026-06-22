@@ -1,3 +1,4 @@
+from django.db.models import ProtectedError
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -47,5 +48,13 @@ class CategoryDetailView(APIView):
             category = Category.objects.get(pk=pk)
         except Category.DoesNotExist:
             return Response({'detail': 'Category does not exist'}, status=status.HTTP_404_NOT_FOUND)
-        category.delete()
+        # Article.category is PROTECT: a category with products cannot be deleted.
+        # Return a clean 400 instead of letting ProtectedError surface as a 500.
+        try:
+            category.delete()
+        except ProtectedError:
+            return Response(
+                {'detail': 'Category still has linked products'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)

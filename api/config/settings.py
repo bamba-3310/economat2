@@ -53,14 +53,26 @@ INSTALLED_APPS = [
     'apps.batches',
     'apps.movements',
     'apps.alerts',
+    # WHEN/WHY: new app backing the frontend delivery/receiving workflow.
+    'apps.deliveries',
+    # WHEN/WHY: configurable branding (restaurant name) + admin maintenance (wipe).
+    'apps.system',
 ]
+
+# WHY: single source of truth for the default product/restaurant name. Used when
+# no custom name has been set, and as the target of "restore to default". Change
+# it here (or via the DEFAULT_RESTAURANT_NAME env var) to rebrand the default.
+DEFAULT_RESTAURANT_NAME = os.getenv("DEFAULT_RESTAURANT_NAME", "Cuistock")
 
 # Before any migration
 AUTH_USER_MODEL = 'accounts.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # WHEN/WHY: custom JWT auth that also enforces a single active session
+        # (rejects tokens whose `sid` no longer matches the user). Replaces the
+        # default 'rest_framework_simplejwt.authentication.JWTAuthentication'.
+        'apps.accounts.authentication.SessionJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -156,8 +168,13 @@ STATIC_URL = 'static/'
 
 
 # Authorize React
+# WHEN/WHY: the frontend moved from Vite (5173) to Next.js. The Next.js dev
+# server (3000) and the chosen preview port (3144) are allowed so the browser /
+# adapter routes can call this API. 5173 kept for backward compatibility.
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "http://localhost:3000",
+    "http://localhost:3144",
 ]
 
 from datetime import timedelta
@@ -165,3 +182,11 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
+
+# WHEN/WHY: single-session idle window. A logged-in session is considered "live"
+# only while it has been seen within this window; past it, the session frees
+# itself (so closing the browser or killing the servers without logging out can
+# no longer lock the account for the full 8h access-token lifetime). It also
+# enforces server-side inactivity logout. The frontend uses the same value to
+# auto-logout and to drive its activity heartbeat. Configurable via env.
+SESSION_IDLE_TIMEOUT = timedelta(minutes=int(os.getenv("SESSION_IDLE_MINUTES", "15")))

@@ -27,4 +27,8 @@ urlpatterns = [
     path('api/batches/', include('apps.batches.urls')),
     path('api/movements/', include('apps.movements.urls')),
     path('api/alerts/', include('apps.alerts.urls')),
+    # WHEN/WHY: delivery/receiving workflow endpoint (frontend Livraison).
+    path('api/deliveries/', include('apps.deliveries.urls')),
+    # WHEN/WHY: branding (restaurant name) + admin maintenance (wipe DB).
+    path('api/system/', include('apps.system.urls')),
 ]
