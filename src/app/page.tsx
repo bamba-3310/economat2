@@ -420,10 +420,13 @@ async function fetchJson<T>(url: string, init?: RequestInit) {
 }
 
 // WHEN/WHY: client-side session lifecycle (inactivity logout + heartbeat).
-// SESSION_IDLE_MS mirrors SESSION_IDLE_MINUTES on the backend (default 15 min):
-// after this long with no user activity we log out. While the user IS active a
-// heartbeat keeps the server session alive; when idle (or the tab/window is
-// closed) the heartbeat stops and the server session frees itself too.
+// SESSION_IDLE_MS is only the FALLBACK idle window (15 min, matching the
+// backend's default): after this long with no user activity we log out. The
+// authoritative value is SESSION_IDLE_MINUTES on the backend, served through
+// /api/branding as `sessionIdleMinutes` (see useBranding) so changing the env
+// can no longer desynchronize the two. While the user IS active a heartbeat
+// keeps the server session alive; when idle (or the tab/window is closed) the
+// heartbeat stops and the server session frees itself too.
 const SESSION_IDLE_MS = 15 * 60 * 1000;
 const HEARTBEAT_INTERVAL_MS = 4 * 60 * 1000;
 const ACTIVITY_EVENTS = [
@@ -1011,6 +1014,11 @@ export default function Home() {
   // clock / re-subscribe the listeners.
   const tRef = useRef(t);
   tRef.current = t;
+  // Idle window mirrored from the backend (read through a ref so an updated
+  // value doesn't reset the listeners / the idle clock).
+  const { sessionIdleMinutes } = useBranding();
+  const sessionIdleMsRef = useRef(SESSION_IDLE_MS);
+  sessionIdleMsRef.current = Math.max(60_000, sessionIdleMinutes * 60_000);
   useEffect(() => {
     if (!currentUser || typeof window === "undefined") return undefined;
 
@@ -1025,7 +1033,7 @@ export default function Home() {
     );
 
     const idleTimer = window.setInterval(() => {
-      if (Date.now() - lastActivity >= SESSION_IDLE_MS) {
+      if (Date.now() - lastActivity >= sessionIdleMsRef.current) {
         logout(tRef.current("Déconnecté après une période d'inactivité."));
       }
     }, 30_000);

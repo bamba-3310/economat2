@@ -6,13 +6,16 @@ from rest_framework.permissions import IsAuthenticated
 
 from .models import Category
 from .serializers import CategorySerializer
-from apps.permissions import IsAdminOrEconome
+from apps.permissions import HasAnyAppPermission
 
 
+# WHEN/WHY: write access was role-based (IsAdminOrEconome); it now mirrors the
+# granular rights the frontend checks for category management (the Next.js
+# /api/categories route requires manage_categories or edit_thresholds).
 class CategoryListCreateView(APIView):
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [IsAuthenticated(), IsAdminOrEconome()]
+            return [IsAuthenticated(), HasAnyAppPermission('manage_categories', 'edit_thresholds')]
         return [IsAuthenticated()]
 
     def get(self, request):
@@ -29,7 +32,8 @@ class CategoryListCreateView(APIView):
 
 
 class CategoryDetailView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrEconome]
+    def get_permissions(self):
+        return [IsAuthenticated(), HasAnyAppPermission('manage_categories', 'edit_thresholds')]
 
     def patch(self, request, pk):
         """Update a category (Admin & Econome)"""

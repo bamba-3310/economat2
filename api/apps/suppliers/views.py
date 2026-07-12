@@ -5,16 +5,19 @@ from rest_framework.permissions import IsAuthenticated
 
 from .models import Supplier
 from .serializers import SupplierSerializer
-from apps.permissions import IsAdminOrEconome
+from apps.permissions import HasAnyAppPermission
 
+# WHEN/WHY: access was role-based (IsAdminOrEconome); it now mirrors the
+# granular right the frontend checks for supplier management (the Next.js
+# /api/suppliers route requires validate_deliveries).
 class SupplierListCreateView(APIView):
     def get_permissions(self):
-        if self.request.method == 'POST' or self.request.method == 'GET':
-            return [IsAuthenticated(), IsAdminOrEconome()]
+        if self.request.method in ('POST', 'GET'):
+            return [IsAuthenticated(), HasAnyAppPermission('validate_deliveries')]
         return [IsAuthenticated()]
 
     def get(self, request):
-        """List all suppliers (Admin/Econome)"""
+        """List all suppliers (admin or validate_deliveries holder)"""
         suppliers = Supplier.objects.all().order_by('name')
         return Response(SupplierSerializer(suppliers, many=True).data)
 
@@ -27,7 +30,8 @@ class SupplierListCreateView(APIView):
 
 
 class SupplierDetailView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrEconome]
+    def get_permissions(self):
+        return [IsAuthenticated(), HasAnyAppPermission('validate_deliveries')]
 
     def patch(self, request, pk):
         """Update a supplier (Admin/Econome)"""

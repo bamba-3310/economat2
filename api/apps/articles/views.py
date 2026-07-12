@@ -5,12 +5,16 @@ from rest_framework.permissions import IsAuthenticated
 
 from .models import Article
 from .serializers import ArticleSerializer
-from apps.permissions import IsAdminOrEconome
+from apps.permissions import HasAnyAppPermission
 
+# WHEN/WHY: write access was role-based (IsAdminOrEconome), which 403'd users
+# holding the matching granular rights the frontend checks (edit_stock /
+# edit_thresholds / validate_deliveries). Now mirrors the frontend model;
+# admins always pass (see HasAnyAppPermission).
 class ArticleListCreateView(APIView):
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [IsAuthenticated(), IsAdminOrEconome()]
+            return [IsAuthenticated(), HasAnyAppPermission('edit_stock', 'validate_deliveries')]
         return [IsAuthenticated()]
 
     def get(self, request):
@@ -27,7 +31,10 @@ class ArticleListCreateView(APIView):
 
 
 class ArticleDetailView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrEconome]
+    def get_permissions(self):
+        if self.request.method == 'DELETE':
+            return [IsAuthenticated(), HasAnyAppPermission('edit_stock')]
+        return [IsAuthenticated(), HasAnyAppPermission('edit_stock', 'edit_thresholds')]
 
     def patch(self, request, pk):
         """Update an article (Admin/Econome)"""

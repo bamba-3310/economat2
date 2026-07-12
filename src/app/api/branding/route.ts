@@ -5,11 +5,19 @@ import { getActiveActor } from "@/server/permissions";
 export const runtime = "nodejs";
 
 // Django shape (snake_case) -> frontend shape (camelCase).
-type DjangoBranding = { name: string; default_name: string; is_custom: boolean };
+type DjangoBranding = {
+  name: string;
+  default_name: string;
+  is_custom: boolean;
+  // WHEN/WHY: the backend's SESSION_IDLE_MINUTES is authoritative; forwarding
+  // it lets the client idle-logout mirror it instead of hardcoding 15 min.
+  session_idle_minutes?: number;
+};
 const toClient = (d: DjangoBranding) => ({
   name: d.name,
   defaultName: d.default_name,
   isCustom: d.is_custom,
+  sessionIdleMinutes: d.session_idle_minutes ?? null,
 });
 
 // Public: the login screen (pre-auth) needs the restaurant name.
@@ -17,7 +25,7 @@ export async function GET() {
   const result = await djangoPublicFetch<DjangoBranding>("/api/system/branding/");
   if (!result.ok || !result.data) {
     // Let the client fall back to its default constant.
-    return NextResponse.json({ name: null, defaultName: null, isCustom: false });
+    return NextResponse.json({ name: null, defaultName: null, isCustom: false, sessionIdleMinutes: null });
   }
   return NextResponse.json(toClient(result.data));
 }

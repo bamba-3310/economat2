@@ -10,6 +10,11 @@ class BrandingSerializer(serializers.Serializer):
     default_name = serializers.SerializerMethodField()
     # `is_custom` is True when an admin has overridden the default.
     is_custom = serializers.SerializerMethodField()
+    # WHEN/WHY: the web frontend hardcoded its 15-minute idle logout while the
+    # backend reads SESSION_IDLE_MINUTES from env — changing the env silently
+    # desynchronized the two. The public branding/config endpoint now carries
+    # the authoritative value so the client mirrors it.
+    session_idle_minutes = serializers.SerializerMethodField()
 
     def get_name(self, obj):
         return obj.effective_name
@@ -19,3 +24,6 @@ class BrandingSerializer(serializers.Serializer):
 
     def get_is_custom(self, obj):
         return bool(obj.restaurant_name)
+
+    def get_session_idle_minutes(self, obj):
+        return int(django_settings.SESSION_IDLE_TIMEOUT.total_seconds() // 60)

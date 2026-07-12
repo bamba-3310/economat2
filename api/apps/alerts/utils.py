@@ -17,39 +17,55 @@ def check_stock_threshold(article):
             Alert.objects.create(
                 article=article,
                 type='threshold',
-                message=f"Low stock : {article.name} ({article.stock_quantity} {article.unit} left, threshold : {article.min_threshold}"
+                message=f"Low stock : {article.name} ({article.stock_quantity} {article.unit} left, threshold : {article.min_threshold})"
             )
 
 
 def check_expiration_dates():
-    """Creates alerts for the products that will expire in less than 2 days"""
+    """Creates alerts for batches inside their expiry warning window (incl. already expired)."""
     from apps.batches.models import Batch
 
-    bathes = Batch.objects.filter(
-        expiry_date__gte=timezone.now().date(),
+    # WHEN/WHY: rewritten after a code review found this function crashed with a
+    # NameError (`article` was undefined — it must be `batch.article`), created
+    # alerts without `type='expiration'` (so the dedupe filter below never
+    # matched and duplicates piled up), and called `.date()` on `received_at`,
+    # which is already a date. The old `expiry_date__gte=today` filter also
+    # silently skipped batches that had ALREADY expired; those are the most
+    # urgent ones, so expired batches with stock left now alert too.
+    today = timezone.now().date()
+    batches = Batch.objects.filter(
+        expiry_date__isnull=False,
+        quantity__gt=0,
     ).select_related('article')
 
-    for batch in bathes:
+    for batch in batches:
         # Window = 50% of the conservation duration, minimum 1 day
         shelf_life = batch.article.shelf_life_days or 7
         warning_days = max(1, shelf_life // 2)
 
-        limit = timezone.now().date() + timedelta(days=warning_days)
+        limit = today + timedelta(days=warning_days)
 
         if batch.expiry_date > limit:
             continue    # not in the alert zone yet
 
         already_exists = Alert.objects.filter(
-            article=article,
+            article=batch.article,
             type='expiration',
             read=False
         ).exists()
 
         if not already_exists:
-            days_left = (batch.expiry_date - timezone.now().date()).days
+            days_left = (batch.expiry_date - today).days
+            detail = f"{batch.article.name} - batch {batch.received_at} ({batch.quantity} {batch.article.unit})"
+            message = (
+                f"Expired {-days_left} day(s) ago : {detail}"
+                if days_left < 0
+                else f"Expiry in {days_left} day(s) : {detail}"
+            )
             Alert.objects.create(
-                article=article,
-                message=f"Expiry in {days_left} day(s) : {batch.article.name} - batch {batch.received_at.date()} ({batch.quantity} {batch.article.unit}"
+                article=batch.article,
+                type='expiration',
+                message=message,
             )
 
 

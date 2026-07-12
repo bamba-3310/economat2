@@ -177,14 +177,13 @@ export async function recordStockMovement({
   const articleId = Number(lot.productId);
   const batchId = Number(lotId);
 
+  // WHEN/WHY: these used to be TWO calls (movement POST + a batch PATCH
+  // computed from a stale snapshot), so concurrent scanners could lose an
+  // update and a failure between the calls left article stock and batch
+  // quantity out of sync. Django's movement endpoint now applies the batch
+  // side-effect (status flip on activation, quantity decrement on exit) in the
+  // same DB transaction, so a single POST does it all. CODE_REVIEW_PLAN #4.
   if (type === "Activation") {
-    const patched = await djangoFetch<{ detail?: string }>(`/api/batches/${batchId}/`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "in_service" }),
-    });
-    if (!patched.ok) {
-      return { blockedReason: djangoDetail(patched, "Activation refusée."), movement: undefined, snapshot };
-    }
     const logged = await djangoFetch<{ detail?: string }>("/api/movements/", {
       method: "POST",
       body: JSON.stringify({
@@ -196,9 +195,6 @@ export async function recordStockMovement({
       return { blockedReason: djangoDetail(logged, "Activation refusée."), movement: undefined, snapshot };
     }
   } else {
-    // Order matters: the movement POST is what decrements Django's article stock
-    // (and is rejected when the exit exceeds stock). Only patch the batch qty
-    // once it succeeds.
     const logged = await djangoFetch<{ detail?: string }>("/api/movements/", {
       method: "POST",
       body: JSON.stringify({
@@ -208,17 +204,6 @@ export async function recordStockMovement({
     });
     if (!logged.ok) {
       return { blockedReason: djangoDetail(logged, "Sortie refusée."), movement: undefined, snapshot };
-    }
-    const patched = await djangoFetch<{ detail?: string }>(`/api/batches/${batchId}/`, {
-      method: "PATCH",
-      body: JSON.stringify({ quantity: Math.max(0, lot.remainingQuantity - quantity) }),
-    });
-    if (!patched.ok) {
-      return {
-        blockedReason: djangoDetail(patched, "Sortie enregistrée mais quantité du lot non mise à jour."),
-        movement: undefined,
-        snapshot,
-      };
     }
   }
 
@@ -230,6 +215,9 @@ export async function recordStockMovement({
     quantity,
     unit: product?.unit ?? "",
     actorId,
+    // Transient client-side echo; the authoritative snapshot (with the
+    // server-side author name) replaces it on the next refresh.
+    actorName: "",
     createdAt: new Date().toISOString(),
     note: type === "Activation" ? "Lot activé par scan" : "Sortie enregistrée par scan",
   };
@@ -413,55 +401,54 @@ export async function correctStock({
   // Lot quantity / expiry / stored status
   if (lot && (remainingQuantity !== undefined || expirationDate || status)) {
     const batchId = Number(lot.id);
-    const patch: Record<string, unknown> = {};
-    let delta = 0;
 
-    if (remainingQuantity !== undefined) {
-      const next = Math.max(0, Math.round(remainingQuantity));
-      delta = next - lot.remainingQuantity;
-      patch.quantity = next;
-    }
+    // Expiry/status are absolute writes with no derived stock math — a plain
+    // batch PATCH is race-free for them.
+    const patch: Record<string, unknown> = {};
     if (expirationDate) patch.expiry_date = expirationDate;
     if (status === "En réserve") patch.status = "reserve";
     if (status === "En service") patch.status = "in_service";
 
-    const patched = await djangoFetch<{ detail?: string }>(`/api/batches/${batchId}/`, {
-      method: "PATCH",
-      body: JSON.stringify(patch),
-    });
-    if (!patched.ok) return fail(djangoDetail(patched, "Correction du lot refusée."));
-
-    // Reconcile the article stock + log a correction movement.
-    if (delta !== 0 && product) {
-      const article = await djangoFetch<{ stock_quantity?: number; detail?: string }>(
-        `/api/articles/${Number(productId)}/`,
-      );
-      if (!article.ok) return fail(djangoDetail(article, "Article introuvable."));
-      const current = article.data?.stock_quantity ?? 0;
-      const stockRes = await djangoFetch<{ detail?: string }>(`/api/articles/${Number(productId)}/`, {
+    if (Object.keys(patch).length > 0) {
+      const patched = await djangoFetch<{ detail?: string }>(`/api/batches/${batchId}/`, {
         method: "PATCH",
-        body: JSON.stringify({ stock_quantity: Math.max(0, current + delta) }),
+        body: JSON.stringify(patch),
       });
-      if (!stockRes.ok) return fail(djangoDetail(stockRes, "Mise à jour du stock refusée."));
-      const moveRes = await djangoFetch<{ detail?: string }>("/api/movements/", {
-        method: "POST",
-        body: JSON.stringify({
-          article: Number(productId), batch: batchId, type: "correction",
-          quantity: Math.abs(delta), motive: "Correction inventaire",
-        }),
-      });
-      if (!moveRes.ok) return fail(djangoDetail(moveRes, "Mouvement de correction refusé."));
-      movement = {
-        id: `mov-${Date.now().toString(36)}`,
-        type: "Correction",
-        productId,
-        lotId: lot.id,
-        quantity: delta,
-        unit: product.unit,
-        actorId: "",
-        createdAt: new Date().toISOString(),
-        note: "Correction inventaire",
-      };
+      if (!patched.ok) return fail(djangoDetail(patched, "Correction du lot refusée."));
+    }
+
+    // WHEN/WHY: the quantity fix used to be FOUR calls (batch PATCH, article
+    // GET, article PATCH computed from that read, movement POST) — a classic
+    // read-modify-write race, and any mid-sequence failure left stock and lot
+    // out of sync. Django's movement endpoint now takes `corrected_quantity`
+    // (the new absolute batch quantity) and applies batch + article + audit
+    // log in ONE transaction with the rows locked. CODE_REVIEW_PLAN #4.
+    if (remainingQuantity !== undefined) {
+      const next = Math.max(0, Math.round(remainingQuantity));
+      const delta = next - lot.remainingQuantity;
+      if (delta !== 0) {
+        const moveRes = await djangoFetch<{ detail?: string }>("/api/movements/", {
+          method: "POST",
+          body: JSON.stringify({
+            article: Number(lot.productId), batch: batchId, type: "correction",
+            quantity: Math.abs(delta), corrected_quantity: next,
+            motive: "Correction inventaire",
+          }),
+        });
+        if (!moveRes.ok) return fail(djangoDetail(moveRes, "Mouvement de correction refusé."));
+        movement = {
+          id: `mov-${Date.now().toString(36)}`,
+          type: "Correction",
+          productId,
+          lotId: lot.id,
+          quantity: delta,
+          unit: product?.unit ?? "",
+          actorId: "",
+          actorName: "",
+          createdAt: new Date().toISOString(),
+          note: "Correction inventaire",
+        };
+      }
     }
   }
 

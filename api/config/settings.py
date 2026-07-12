@@ -32,7 +32,14 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG") == "True"
 
-ALLOWED_HOSTS = []
+# WHEN/WHY: the mobile app (Expo) reaches Django over the LAN IP, which the
+# previous empty list (localhost-only when DEBUG) rejected with a 400. The
+# list now comes from .env — e.g. ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.20
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if host.strip()
+]
 
 
 # Application definition
@@ -77,9 +84,21 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    # WHEN/WHY: login/register had no throttling (unlimited credential guessing
+    # and pending-account spam). Scoped throttles are declared on the two views
+    # (throttle_scope = 'login' / 'register'); rates are tunable via env.
+    'DEFAULT_THROTTLE_RATES': {
+        'login': os.getenv('THROTTLE_LOGIN', '10/min'),
+        'register': os.getenv('THROTTLE_REGISTER', '10/hour'),
+    },
 }
 
 MIDDLEWARE = [
+    # WHEN/WHY: CorsMiddleware must sit as high as possible (django-cors-headers
+    # docs), before any middleware that can generate a response (CommonMiddleware
+    # redirects, auth failures, ...). It used to be LAST, so early responses from
+    # the middlewares above it shipped without CORS headers.
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -87,7 +106,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'

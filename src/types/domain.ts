@@ -114,6 +114,9 @@ export type StockMovement = {
   quantity: number;
   unit: string;
   actorId: string;
+  // Author-name snapshot taken by Django at creation; survives account
+  // deletion (actorId then points at a deleted user).
+  actorName: string;
   createdAt: string;
   note?: string;
 };

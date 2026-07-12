@@ -74,7 +74,7 @@ export async function changeLocalPassword({
   newPassword: string;
   userId: string;
 }) {
-  const result = await djangoFetch<{ detail?: string }>(
+  const result = await djangoFetch<{ detail?: string; access?: string; refresh?: string }>(
     "/api/accounts/change-password/",
     {
       method: "POST",
@@ -86,6 +86,12 @@ export async function changeLocalPassword({
   );
 
   if (result.ok) {
+    // WHEN/WHY: Django rotates the session (`sid`) on password change so tokens
+    // minted before the change stop working. It returns a fresh pair for THIS
+    // session — store it, otherwise the very next request would 401.
+    if (result.data?.access && result.data.refresh) {
+      await setAuthCookies(result.data.access, result.data.refresh);
+    }
     return { ok: true, message: "Mot de passe mis à jour." };
   }
 
@@ -96,5 +102,11 @@ export async function changeLocalPassword({
   if (result.status === 401) {
     return { ok: false, message: "Session utilisateur requise." };
   }
-  return { ok: false, message: "Mot de passe actuel incorrect." };
+  if (detail.toLowerCase().includes("current password")) {
+    return { ok: false, message: "Mot de passe actuel incorrect." };
+  }
+  // Password-policy rejections (too common, numeric only, similar to the
+  // user's own attributes, ...) — surface Django's reason rather than
+  // mislabelling it as a wrong current password.
+  return { ok: false, message: detail || "Mot de passe actuel incorrect." };
 }

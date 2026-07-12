@@ -173,9 +173,13 @@ export default function ProductDetail({
           <ul className="mt-3 flex flex-col">
             {productMovements.map((movement) => {
               const lotCode = lots.find((lot) => lot.id === movement.lotId)?.code;
+              // Prefer the server-side name snapshot: it survives account
+              // deletion and works for non-admins (who can't fetch the users
+              // list). The live lookup is only a fallback for legacy rows.
               const userName =
-                users.find((user) => user.id === movement.actorId)?.name ??
-                t("Système");
+                movement.actorName ||
+                (users.find((user) => user.id === movement.actorId)?.name ??
+                  t("Système"));
               const quantityLabel =
                 movement.type === "Activation"
                   ? t("Activation")

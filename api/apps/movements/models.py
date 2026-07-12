@@ -23,7 +23,17 @@ class Movement(models.Model):
     # deleted while keeping its movement history (the movement keeps the article
     # reference; only the batch link is cleared). Added with the lot-delete feature.
     batch = models.ForeignKey('batches.Batch', on_delete=models.SET_NULL, null=True, blank=True, related_name='movements')
-    user = models.ForeignKey('accounts.User', on_delete=models.PROTECT, related_name='movements')
+    # WHEN/WHY: SET_NULL (was PROTECT) — PROTECT made account deletion 500 with
+    # a ProtectedError for ANY user who had ever recorded a movement, i.e. the
+    # admin "delete user" feature never worked in practice. Same pattern as
+    # `batch` above and Delivery.validated_by: the history row is kept, only
+    # the author link is cleared.
+    user = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='movements')
+    # WHEN/WHY: name snapshot taken at creation so the traceability history
+    # keeps saying WHO acted even after the account is deleted (the FK above
+    # goes null on deletion). Also what non-admins see: they can't fetch the
+    # users list, so without this snapshot every other author showed "Système".
+    user_name = models.CharField(max_length=100, blank=True, default='')
 
     class Meta:
         db_table = 'movements'

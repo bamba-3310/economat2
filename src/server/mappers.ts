@@ -168,6 +168,7 @@ export function mapSupplier(s: DjSupplier): Supplier {
 
 type DjMovement = {
   id: number; article: number; batch?: number | null; user?: number | null;
+  user_name?: string | null;
   type: string; quantity: number; motive?: string | null; created_at?: string | null;
 };
 export function mapMovement(m: DjMovement, unit = ""): StockMovement {
@@ -179,6 +180,9 @@ export function mapMovement(m: DjMovement, unit = ""): StockMovement {
     quantity: m.quantity,
     unit,
     actorId: m.user != null ? String(m.user) : "",
+    // Server-side name snapshot: keeps the author readable after the account
+    // is deleted, and for non-admins who can't fetch the users list.
+    actorName: m.user_name ?? "",
     createdAt: m.created_at ?? new Date().toISOString(),
     note: m.motive ?? undefined,
   };

@@ -26,8 +26,11 @@ class UserManager(BaseUserManager):
     def create_user(self, email, name, role, password, status=None, permissions=None):
         if not email:
             raise ValueError('Users must have an email address')
+        # WHEN/WHY: login is case-insensitive; store the whole address lowercased
+        # (normalize_email only lowercases the domain part) so unique=True can't
+        # admit case-variant duplicates.
         user = self.model(
-            email=self.normalize_email(email),
+            email=self.normalize_email(email).lower(),
             name=name,
             role=role,
             status=status or UserStatus.ACTIVE,

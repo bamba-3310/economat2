@@ -25,12 +25,18 @@ import {
 
 export const DEFAULT_RESTAURANT_NAME = "Cuistock";
 
+// Frontend fallback only — the backend (SESSION_IDLE_MINUTES) is authoritative
+// and returns the live value from /api/branding as `sessionIdleMinutes`.
+export const DEFAULT_SESSION_IDLE_MINUTES = 15;
+
 type BrandingResult = { ok: boolean; message?: string };
 
 type BrandingValue = {
   name: string;
   defaultName: string;
   isCustom: boolean;
+  // Server-side inactivity window (minutes); the app auto-logout mirrors it.
+  sessionIdleMinutes: number;
   setName: (name: string) => Promise<BrandingResult>;
   restoreDefault: () => Promise<BrandingResult>;
   refresh: () => Promise<void>;
@@ -40,6 +46,7 @@ type BrandingPayload = {
   name?: string | null;
   defaultName?: string | null;
   isCustom?: boolean;
+  sessionIdleMinutes?: number | null;
   error?: string;
 };
 
@@ -49,12 +56,20 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const [name, setNameState] = useState(DEFAULT_RESTAURANT_NAME);
   const [defaultName, setDefaultName] = useState(DEFAULT_RESTAURANT_NAME);
   const [isCustom, setIsCustom] = useState(false);
+  const [sessionIdleMinutes, setSessionIdleMinutes] = useState(DEFAULT_SESSION_IDLE_MINUTES);
 
   const apply = useCallback((data: BrandingPayload | null) => {
     if (!data) return;
     if (data.defaultName) setDefaultName(data.defaultName);
     if (data.name) setNameState(data.name);
     setIsCustom(Boolean(data.isCustom));
+    if (
+      typeof data.sessionIdleMinutes === "number" &&
+      Number.isFinite(data.sessionIdleMinutes) &&
+      data.sessionIdleMinutes > 0
+    ) {
+      setSessionIdleMinutes(data.sessionIdleMinutes);
+    }
   }, []);
 
   const refresh = useCallback(async () => {
@@ -99,8 +114,8 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const restoreDefault = useCallback(() => patch({ restore: true }), [patch]);
 
   const value = useMemo(
-    () => ({ name, defaultName, isCustom, setName, restoreDefault, refresh }),
-    [name, defaultName, isCustom, setName, restoreDefault, refresh],
+    () => ({ name, defaultName, isCustom, sessionIdleMinutes, setName, restoreDefault, refresh }),
+    [name, defaultName, isCustom, sessionIdleMinutes, setName, restoreDefault, refresh],
   );
 
   return <BrandingContext.Provider value={value}>{children}</BrandingContext.Provider>;

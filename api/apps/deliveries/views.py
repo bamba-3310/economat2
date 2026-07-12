@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
-from apps.permissions import IsAdminOrEconome
+from apps.permissions import HasAnyAppPermission
 from apps.articles.models import Article
 from apps.categories.models import Category
 from apps.suppliers.models import Supplier
@@ -19,6 +19,15 @@ from .models import Delivery, DeliveryStatus
 from .serializers import DeliverySerializer
 
 
+def _parse_expiry(raw_expiry):
+    """Tolerant date parsing: date object, date string, or datetime string."""
+    if isinstance(raw_expiry, date):
+        return raw_expiry
+    if raw_expiry:
+        return parse_date(str(raw_expiry)[:10])
+    return None
+
+
 # WHY: validating a delivery must atomically create one batch + one entry
 # movement per line (and the article if it is new), bump the article stock, and
 # persist the delivery header. Putting this server-side keeps it in a single DB
@@ -26,7 +35,9 @@ from .serializers import DeliverySerializer
 class DeliveryListCreateView(APIView):
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [IsAuthenticated(), IsAdminOrEconome()]
+            # WHEN/WHY: was IsAdminOrEconome; now mirrors the frontend's
+            # granular 'validate_deliveries' right (admins always pass).
+            return [IsAuthenticated(), HasAnyAppPermission('validate_deliveries')]
         return [IsAuthenticated()]
 
     def get(self, request):
@@ -49,44 +60,86 @@ class DeliveryListCreateView(APIView):
         if supplier_id:
             supplier = Supplier.objects.filter(pk=supplier_id).first()
 
-        snapshot = []
-        for line in lines:
-            quantity = int(line.get('quantity') or 0)
+        # ---- Phase 1: validate and resolve EVERY line before writing anything.
+        # WHEN/WHY: the original loop created batches/movements/stock bumps as it
+        # went and then `return Response(400)` on the first invalid line — but
+        # @transaction.atomic only rolls back on exceptions, so the earlier
+        # lines' writes were COMMITTED while the client saw an error (a retry
+        # then duplicated them). It also crashed with an unhandled ValueError on
+        # a non-numeric quantity and accepted 0-quantity lines. All writes now
+        # happen only after the whole payload has validated.
+        resolved_lines = []
+        for index, line in enumerate(lines, start=1):
+            try:
+                quantity = int(line.get('quantity'))
+            except (TypeError, ValueError):
+                return Response(
+                    {'detail': f'line {index}: quantity must be a whole number'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if quantity <= 0:
+                return Response(
+                    {'detail': f'line {index}: quantity must be greater than zero'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-            # Resolve (or create) the article for this line.
             article = None
+            category = None
             if line.get('article'):
                 article = Article.objects.filter(pk=line['article']).first()
-            if article is None and line.get('product_name'):
+                if article is None:
+                    return Response(
+                        {'detail': f'line {index}: unknown article'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            elif line.get('product_name'):
                 category = Category.objects.filter(pk=line.get('category')).first()
                 if category is None:
                     return Response(
                         {'detail': 'a valid category is required to create a new article'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+            else:
+                return Response(
+                    {'detail': 'each line needs an article or a product_name'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                threshold = int(line.get('threshold') or 0)
+            except (TypeError, ValueError):
+                threshold = 0
+
+            resolved_lines.append({
+                'article': article,
+                'category': category,
+                'quantity': quantity,
+                'threshold': max(0, threshold),
+                'line': line,
+            })
+
+        # ---- Phase 2: all lines are valid — perform the writes.
+        snapshot = []
+        for entry in resolved_lines:
+            line = entry['line']
+            quantity = entry['quantity']
+            article = entry['article']
+
+            if article is None:
                 article, _ = Article.objects.get_or_create(
                     name=line['product_name'],
                     defaults={
-                        'category': category,
+                        'category': entry['category'],
                         'unit': line.get('unit') or 'unite',
-                        'min_threshold': int(line.get('threshold') or 0),
+                        'min_threshold': entry['threshold'],
                     },
                 )
-            if article is None:
-                return Response({'detail': 'each line needs an article or a product_name'},
-                                status=status.HTTP_400_BAD_REQUEST)
 
             # Expiry: explicit value, else derived from the article shelf life.
-            # Parse to a real date object — passing a raw string to create()
+            # Parsed to a real date object — passing a raw string to create()
             # leaves the in-memory instance's expiry_date as a str, which later
             # broke `.isoformat()` (AttributeError on the snapshot below).
-            raw_expiry = line.get('expiry_date')
-            if isinstance(raw_expiry, date):
-                expiry = raw_expiry
-            elif raw_expiry:
-                expiry = parse_date(str(raw_expiry)[:10])  # tolerate date or datetime strings
-            else:
-                expiry = None
+            expiry = _parse_expiry(line.get('expiry_date'))
             if not expiry and article.shelf_life_days:
                 expiry = timezone.now().date() + timedelta(days=article.shelf_life_days)
 
@@ -103,7 +156,8 @@ class DeliveryListCreateView(APIView):
             # Entry movement + stock bump (done inline since we are already in a
             # transaction and not going through the movement view).
             Movement.objects.create(
-                article=article, batch=batch, user=request.user,
+                article=article, batch=batch,
+                user=request.user, user_name=request.user.name,
                 type=MovementType.ENTRY, quantity=quantity, motive=reference,
             )
             article.stock_quantity += quantity
@@ -122,7 +176,8 @@ class DeliveryListCreateView(APIView):
 
         delivery = Delivery.objects.create(
             reference=reference,
-            delivered_at=data.get('delivered_at') or None,
+            # Parsed leniently: an unparseable date becomes None instead of a 500.
+            delivered_at=_parse_expiry(data.get('delivered_at')),
             status=DeliveryStatus.VALIDATED,
             validated_by=request.user,
             supplier=supplier,
