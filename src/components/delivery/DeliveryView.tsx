@@ -18,7 +18,7 @@ import {
   normalizeSearchValue,
 } from "@/lib/format";
 import type { Delivery } from "@/types/domain";
-import { Eyebrow, Field, Select, TextInput } from "@/components/ui/kit";
+import { Eyebrow, Field, Select, TextInput, Combobox } from "@/components/ui/kit";
 import QrLabel from "@/components/delivery/QrLabel";
 
 export default function DeliveryView({
@@ -68,9 +68,7 @@ export default function DeliveryView({
     .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 
   const printableLines = lines.filter((line) => line.product && line.lot);
-  const validLines = printableLines.filter(
-    (line) => Number(line.quantity) > 0 && line.unit,
-  );
+  const validLines = printableLines.filter((line) => Number(line.quantity) > 0);
   const copiesPerLot = Math.min(3, Math.max(1, Math.round(Number(labelCopies) || 1)));
   const queuedLabels = printableLines.flatMap((line) =>
     Array.from({ length: copiesPerLot }, (_, copyIndex) => ({ copyIndex, line })),
@@ -114,7 +112,7 @@ export default function DeliveryView({
       : !draft.reference.trim() || !draft.deliveredAt
         ? "Référence et date requises."
         : validLines.length === 0
-          ? "Complétez une ligne : produit, unité, quantité, lot."
+          ? "Complétez une ligne : produit, quantité, lot."
           : "";
   const canRegenerateFailedReference =
     isValidationError && normalizeSearchValue(validationMessage).includes("reference");
@@ -140,7 +138,8 @@ export default function DeliveryView({
       threshold: nextProduct
         ? String(nextProduct.threshold)
         : line.threshold || String(nextCategory?.defaultThreshold ?? ""),
-      unit: nextProduct?.unit ?? (line.unit || "unité"),
+      // Portion-based lots: ignore legacy product units (kg, litre, …).
+      unit: "portion",
     });
   }
 
@@ -443,11 +442,13 @@ export default function DeliveryView({
                   <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="sm:col-span-2">
                       <Field label={t("Produit")}>
-                        <TextInput
-                          list="delivery-product-options"
+                        <Combobox
                           value={line.product}
-                          onChange={(e) => updateProduct(line, e.target.value)}
+                          onChange={(next) => updateProduct(line, next)}
+                          options={products.map((product) => product.name)}
                           placeholder={t("Choisir ou saisir")}
+                          emptyLabel={t("Aucun produit visible")}
+                          listLabel={t("Produit")}
                         />
                       </Field>
                     </div>
@@ -459,13 +460,6 @@ export default function DeliveryView({
                         onChange={(e) =>
                           onUpdateLine(line.id, { quantity: e.target.value })
                         }
-                      />
-                    </Field>
-                    <Field label={t("Unité")}>
-                      <TextInput
-                        value={line.unit}
-                        onChange={(e) => onUpdateLine(line.id, { unit: e.target.value })}
-                        placeholder="kg"
                       />
                     </Field>
                     <Field label={t("Catégorie")}>
@@ -638,14 +632,17 @@ export default function DeliveryView({
               const value = matchedLot
                 ? createLotQrValue(matchedLot)
                 : createLotQrValue(line.lot || "preview");
+              const receivedAt =
+                matchedLot?.receivedAt || draft.deliveredAt || "";
               return (
                 <QrLabel
                   key={`${line.id}-${copyIndex}`}
                   productName={line.product}
                   lotCode={line.lot}
                   quantity={line.quantity}
-                  unit={line.unit}
+                  unit={line.unit || "portion"}
                   expiration={line.expiration}
+                  receivedAt={receivedAt}
                   value={value}
                   scannable={validatedLotCodes.has(line.lot)}
                   copyIndex={copyIndex}
@@ -688,13 +685,6 @@ export default function DeliveryView({
           </ul>
         </section>
       ) : null}
-
-      {/* Product autocomplete options */}
-      <datalist id="delivery-product-options">
-        {products.map((product) => (
-          <option key={product.id} value={product.name} />
-        ))}
-      </datalist>
     </div>
   );
 }

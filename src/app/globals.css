@@ -14,6 +14,7 @@
    ========================================================= */
 
 :root {
+  color-scheme: light;
   --bg: #ffffff;
   --bg-2: #f6f6f5;
   --paper: #ffffff;
@@ -53,6 +54,7 @@
 }
 
 html[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0a0a0a;
   --bg-2: #161615;
   --paper: #131312;
@@ -119,6 +121,18 @@ html[data-theme="dark"] body::before {
 ::selection {
   background: var(--ink);
   color: var(--bg);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ---------- typography ---------- */
@@ -478,27 +492,136 @@ button.card:active {
 
 .input {
   width: 100%;
-  background: transparent;
+  background: var(--paper);
   border: 1px solid var(--line-strong);
   border-radius: 2px;
   padding: 0.7rem 0.85rem;
   font-size: 0.9rem;
   color: var(--ink);
   font-family: var(--font-sans), sans-serif;
-  transition: border-color var(--fast) var(--ease);
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+  color-scheme: inherit;
 }
 .input::placeholder { color: var(--faint); }
 .input:focus { outline: none; border-color: var(--ink); }
 
+/* Native <select> popup uses OS chrome; color-scheme + opaque option
+   colors keep the open list readable in both themes (esp. Windows). */
 select.input {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238c867a' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-color: var(--paper);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238a8a86' stroke-width='1.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.85rem center;
+  background-size: 12px 8px;
   padding-right: 2.2rem;
 }
 
+select.input option,
+select.input optgroup {
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+/* Custom dropdown / combobox — same panel for Select and product picker */
+.menu-anchor {
+  position: relative;
+  width: 100%;
+}
+
+.menu-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  /* button.input must not keep UA button chrome */
+  appearance: none;
+  font: inherit;
+  line-height: inherit;
+}
+
+.menu-trigger .menu-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform var(--fast) var(--ease);
+}
+
+.menu-anchor.is-open .menu-chevron {
+  transform: rotate(180deg);
+}
+
+.menu-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  max-height: 15rem;
+  overflow-y: auto;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  box-shadow: var(--shadow-soft);
+  animation: menu-in var(--fast) var(--ease);
+  scrollbar-width: thin;
+}
+
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border: none;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-sans), sans-serif;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease);
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-item:hover,
+.menu-item.is-active {
+  background: var(--bg-2);
+}
+
+.menu-item.is-selected {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.menu-item.is-selected:hover,
+.menu-item.is-selected.is-active {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.menu-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.menu-empty {
+  padding: 0.7rem 0.85rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .input-underline {
+  background: transparent;
   border: none;
   border-bottom: 1px solid var(--line-strong);
   border-radius: 0;
@@ -797,20 +920,35 @@ select.input {
 /* ---------- print: QR labels only (redesign) ---------- */
 @media print {
   @page { margin: 12mm; size: A4; }
-  body * { visibility: hidden; }
-  .qr-label-grid, .qr-label-grid * { visibility: visible; }
+
+  /* display:none (not visibility:hidden) so the rest of the app does not
+     create blank pages while the QR grid is printed. */
+  body * {
+    display: none !important;
+  }
+
+  .qr-label-grid,
+  .qr-label-grid * {
+    display: revert !important;
+  }
+
   .qr-label-grid {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
     display: grid !important;
+    position: static !important;
+    width: 100% !important;
     gap: 10px !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
+
   .qr-label-card {
+    display: flex !important;
+    flex-direction: column !important;
     break-inside: avoid;
     page-break-inside: avoid;
     box-shadow: none !important;
+  }
+
+  .qr-label-card > button {
+    display: none !important;
   }
 }
