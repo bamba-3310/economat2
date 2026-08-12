@@ -81,4 +81,25 @@ un rollback ciblé (`git revert` / `git reset` selon besoin) :
 Voir [DEPLOY.md](DEPLOY.md) pour la procédure complète (Docker, UFW, clone,
 admin + `grant_membership --slug all`).
 
-IP cible documentée : `95.217.189.82` — domaines `*.kovo-app.net`.
+IP cible : `95.217.189.82` — domaines `lecarre.kovo-app.net` /
+`bahiafc.kovo-app.net`.
+
+### Statut au moment du déploiement
+
+- Stack Docker up : `db`, `api` (Gunicorn), `web` (Next.js), `caddy` (HTTPS Let’s Encrypt).
+- Certificats obtenus pour les deux sous-domaines.
+- Branding distinct vérifié : Le Carré / Bahia FC via `/api/branding`.
+- Compte admin créé avec memberships sur **les deux** restos.
+- Identifiants admin stockés **uniquement sur le serveur** :
+  `/opt/economat/ADMIN_CREDENTIALS.txt` (chmod 600) — pas dans git.
+
+### Mises à jour ultérieures
+
+Comme le dépôt sur le VPS a été initialisé par archive (pas un `git clone`),
+pour les prochains déploiements soit :
+
+1. `git init` + remote sur `/opt/economat` puis utiliser `./deploy.sh`, **ou**
+2. re-pousser une archive / rsync depuis ton PC.
+
+Recommandé : configurer un clone Git avec deploy key lecture seule, puis
+`./deploy.sh`.
