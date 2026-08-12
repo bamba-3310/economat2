@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.production.example
+api/venv
+venv
+mobile_archive
+*.md
+!DEPLOY.md
+!update_acces_distant.md
+tsconfig.tsbuildinfo
+.next

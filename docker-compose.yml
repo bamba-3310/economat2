@@ -1,0 +1,64 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-economat}
+      POSTGRES_USER: ${DB_USER:-economat}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-economat} -d ${DB_NAME:-economat}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DEBUG: "False"
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-lecarre.kovo-app.net,bahiafc.kovo-app.net,api,localhost}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://lecarre.kovo-app.net,https://bahiafc.kovo-app.net}
+      DEFAULT_RESTAURANT_SLUG: ${DEFAULT_RESTAURANT_SLUG:-lecarre}
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DJANGO_API_URL: http://api:8000
+      DEFAULT_RESTAURANT_SLUG: ${DEFAULT_RESTAURANT_SLUG:-lecarre}
+    depends_on:
+      - api
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

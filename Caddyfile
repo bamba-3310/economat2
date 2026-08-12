@@ -1,0 +1,4 @@
+lecarre.kovo-app.net, bahiafc.kovo-app.net {
+	encode gzip
+	reverse_proxy web:3000
+}

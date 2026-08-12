@@ -1,8 +1,17 @@
-# Le Carré — Économat & Stock Management
+# Le Carré / Bahia FC — Économat & Stock Management
 
 Web application for managing a restaurant's economat (stock room): products,
 lots/batches, suppliers, deliveries, stock movements, expiry/threshold alerts,
 QR codes, and a consumption dashboard.
+
+**Multi-tenant production** (same codebase, one VPS):
+
+- https://lecarre.kovo-app.net — Le Carré
+- https://bahiafc.kovo-app.net — Bahia FC
+
+See [DEPLOY.md](DEPLOY.md) and [update_acces_distant.md](update_acces_distant.md).
+The native Expo app is archived under `mobile_archive/` (tablets use the web
+camera scan).
 
 The UI is **bilingual (French / English)** — French is the canonical language
 (stored values and the i18n keys are French; English is a translation layer).
