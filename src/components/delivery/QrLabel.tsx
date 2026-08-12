@@ -10,8 +10,8 @@ export default function QrLabel({
   productName,
   lotCode,
   quantity,
-  unit,
   expiration,
+  receivedAt,
   value,
   scannable,
   copyIndex,
@@ -21,8 +21,10 @@ export default function QrLabel({
   productName: string;
   lotCode: string;
   quantity: string;
-  unit: string;
+  /** Kept for callers; stock is portion-based so labels no longer show a unit. */
+  unit?: string;
   expiration: string;
+  receivedAt?: string;
   value: string;
   scannable: boolean;
   copyIndex?: number;
@@ -66,14 +68,18 @@ export default function QrLabel({
             <dd className="tabular truncate font-medium">{lotCode || "—"}</dd>
           </div>
           <div className="flex justify-between gap-3 border-b border-[var(--line-soft)] py-1.5">
-            <dt className="text-[var(--muted)]">{t("Qté")}</dt>
-            <dd className="tabular">
-              {quantity || "—"} {unit}
-            </dd>
+            <dt className="text-[var(--muted)]">{t("Portions")}</dt>
+            <dd className="tabular">{quantity || "—"}</dd>
           </div>
-          <div className="flex justify-between gap-3 py-1.5">
+          <div className="flex justify-between gap-3 border-b border-[var(--line-soft)] py-1.5">
             <dt className="text-[var(--muted)]">{t("Exp.")}</dt>
             <dd className="tabular">{formatDate(expiration)}</dd>
+          </div>
+          <div className="flex justify-between gap-3 py-1.5">
+            <dt className="text-[var(--muted)]">{t("Récept.")}</dt>
+            <dd className="tabular">
+              {receivedAt ? formatDate(receivedAt) : "—"}
+            </dd>
           </div>
         </dl>
       </div>

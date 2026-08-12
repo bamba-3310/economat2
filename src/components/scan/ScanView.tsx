@@ -39,8 +39,8 @@ export default function ScanView({
   onOpenProduct,
   onPrimaryAction,
 }: {
-  lot: Lot;
-  product: Product;
+  lot?: Lot;
+  product?: Product;
   onScanCode: (value: string) => Promise<ScanCodeResult>;
   onScanProduct: (productId: string) => void;
   onOpenProduct: (productId: string) => void;
@@ -70,14 +70,23 @@ export default function ScanView({
   const bufferTimerRef = useRef<number | null>(null);
 
   const category = categories.find((item) => item.id === product?.categoryId);
-  const decision = evaluateLotScan({
-    category,
-    lot,
-    lots,
-    quantityOut,
-    today: operationDate,
-    unknownScan,
-  });
+  const decision = lot
+    ? evaluateLotScan({
+        category,
+        lot,
+        lots,
+        quantityOut,
+        today: operationDate,
+        unknownScan,
+      })
+    : {
+        allowed: false,
+        action: "Action bloquée" as const,
+        reason: "Scannez un QR pour afficher un lot",
+        severity: "warning" as const,
+        canActivate: false,
+        canExit: false,
+      };
   const suggestions = getSuggestedScanProducts(products, product?.id ?? "");
   const actionBlocked = decision.severity === "blocked";
 
@@ -486,8 +495,14 @@ export default function ScanView({
                 </h2>
                 <p className="tabular mt-1 text-[0.82rem] text-[var(--muted)]">
                   {lot?.code ?? t("Aucune fiche lot")}
-                  {lot ? ` · ${t("Exp.")} ${formatDate(lot.expirationDate)}` : ""}
                 </p>
+                {lot && !unknownScan ? (
+                  <p className="tabular mt-1 text-[0.78rem] text-[var(--muted)]">
+                    {t("Récept.")} {formatDate(lot.receivedAt)}
+                    {" · "}
+                    {t("Exp.")} {formatDate(lot.expirationDate)}
+                  </p>
+                ) : null}
               </div>
               {lot ? <LotStatusChip status={lot.status} /> : null}
             </div>
@@ -498,7 +513,8 @@ export default function ScanView({
                   {lot.remainingQuantity}
                 </span>
                 <span className="text-sm text-[var(--muted)]">
-                  / {lot.initialQuantity} {product?.unit}
+                  / {lot.initialQuantity} {t("portions")}
+                  {product?.unit ? ` (${product.unit})` : ""}
                 </span>
                 {product ? (
                   <span className="ml-auto">
@@ -525,25 +541,31 @@ export default function ScanView({
             {/* Actions */}
             <div className="mt-5 flex flex-col gap-3">
               {decision.canExit ? (
-                <div className="flex items-center gap-2">
-                  <span className="field-label mb-0 shrink-0">{t("Qté")}</span>
-                  {[1, 6, 12].map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setQuantityOut(value)}
-                      className={`btn btn-sm ${quantityOut === value ? "btn-primary" : "btn-line"}`}
-                    >
-                      -{value}
-                    </button>
-                  ))}
-                  <input
-                    type="number"
-                    min="1"
-                    value={quantityOut}
-                    onChange={(e) => setQuantityOut(Math.max(1, Number(e.target.value) || 1))}
-                    className="input tabular w-20"
-                  />
+                <div className="flex flex-col gap-2">
+                  <span className="field-label mb-0">{t("Portions à sortir")}</span>
+                  <div className="flex items-center gap-2">
+                    {[1, 6, 12].map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setQuantityOut(value)}
+                        className={`btn btn-sm ${quantityOut === value ? "btn-primary" : "btn-line"}`}
+                      >
+                        -{value}
+                      </button>
+                    ))}
+                    <input
+                      type="number"
+                      min="1"
+                      max={lot?.remainingQuantity ?? undefined}
+                      value={quantityOut}
+                      onChange={(e) =>
+                        setQuantityOut(Math.max(1, Number(e.target.value) || 1))
+                      }
+                      className="input tabular w-20"
+                      aria-label={t("Portions à sortir")}
+                    />
+                  </div>
                 </div>
               ) : null}
 

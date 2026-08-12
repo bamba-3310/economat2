@@ -518,8 +518,7 @@ const permissionOptions: Array<{
 ];
 
 const initialDeliveryDate = getTodayInputDate();
-const initialDeliveryLines: DeliveryLine[] =
-  createInitialDeliveryLines(initialDeliveryDate);
+const initialDeliveryLines: DeliveryLine[] = [createEmptyDeliveryLine()];
 const initialDeliveryDraft = createDeliveryDraft([], initialDeliveryDate);
 
 function normalizeSearchValue(value: string) {
@@ -597,7 +596,7 @@ function createEmptyDeliveryLine(id = 1): DeliveryLine {
     product: "",
     quantity: "",
     threshold: "",
-    unit: "",
+    unit: "portion",
   };
 }
 
@@ -693,39 +692,6 @@ function downloadTextFile({
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-}
-
-function createInitialDeliveryLines(deliveredAt: string): DeliveryLine[] {
-  return [
-    {
-      categoryId: "viande",
-      expiration: addDaysToInputDate(deliveredAt, 3),
-      id: 1,
-      lot: createSuggestedLotCode({
-        deliveredAt,
-        lineId: 1,
-        productName: "Filet de boeuf",
-      }),
-      product: "Filet de boeuf",
-      quantity: "10",
-      threshold: "8",
-      unit: "kg",
-    },
-    {
-      categoryId: "boissons",
-      expiration: addDaysToInputDate(deliveredAt, 161),
-      id: 2,
-      lot: createSuggestedLotCode({
-        deliveredAt,
-        lineId: 2,
-        productName: "Eau plate 50 cl",
-      }),
-      product: "Eau plate 50 cl",
-      quantity: "24",
-      threshold: "24",
-      unit: "bouteilles",
-    },
-  ];
 }
 
 function synchronizeDeliveryLinesWithDate({
@@ -869,7 +835,7 @@ export default function Home() {
     useState<DeliveryDraft>(initialDeliveryDraft);
   const [deliveryLines, setDeliveryLines] =
     useState<DeliveryLine[]>(initialDeliveryLines);
-  const [scannedLotId, setScannedLotId] = useState("lot-005");
+  const [scannedLotId, setScannedLotId] = useState("");
   const hasSyncedInitialDeliveryReference = useRef(false);
   const { alerts, categories, deliveries, lots, products } = runtimeData;
   const canUseDelivery = hasClientPermission(currentUser, ["validate_deliveries"]);
@@ -1506,7 +1472,7 @@ export default function Home() {
             threshold: Number.isFinite(threshold) && threshold >= 0
               ? Math.round(threshold)
               : undefined,
-            unit: line.unit || product?.unit || "",
+            unit: "portion",
             lotCode: line.lot,
             expirationDate: line.expiration || undefined,
           },

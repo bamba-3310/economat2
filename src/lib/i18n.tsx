@@ -368,6 +368,8 @@ const EN: Record<string, string> = {
   "Aucune ligne complète à valider.": "No complete line to validate.",
   "Sélectionnez un fournisseur.": "Select a supplier.",
   "Référence et date requises.": "Reference and date required.",
+  "Complétez une ligne : produit, quantité, lot.":
+    "Complete a line: product, quantity, batch.",
   "Complétez une ligne : produit, unité, quantité, lot.":
     "Complete a line: product, unit, quantity, batch.",
   "Valider et créer les lots": "Validate and create the batches",
@@ -396,6 +398,10 @@ const EN: Record<string, string> = {
   "Pas de QR par unité : uniquement des duplicatas d'étiquette.":
     "No QR per unit: only label duplicates.",
   "1 étiquette par lot physique": "1 label per physical batch",
+  Portions: "Portions",
+  portions: "portions",
+  "Portions à sortir": "Portions to take out",
+  "Récept.": "Recv.",
 
   // --- Stock view ---
   "Lecture stock": "Stock reading",
