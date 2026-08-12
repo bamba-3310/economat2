@@ -13,6 +13,11 @@ class BatchStatus(models.TextChoices):
 
 
 class Batch(models.Model):
+    restaurant = models.ForeignKey(
+        'restaurants.Restaurant',
+        on_delete=models.CASCADE,
+        related_name='batches',
+    )
     quantity = models.PositiveIntegerField(default=0)
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     expiry_date = models.DateField(null=True, blank=True)
@@ -22,7 +27,8 @@ class Batch(models.Model):
     # --- New lot fields (see WHY/WHEN above) ---
     code = models.CharField(max_length=40, null=True, blank=True)
     initial_quantity = models.PositiveIntegerField(default=0)
-    status = models.CharField(max_length=20, choices=BatchStatus.choices, default=BatchStatus.RESERVE)
+    # Default in_service: lots are usable immediately (activation is automatic).
+    status = models.CharField(max_length=20, choices=BatchStatus.choices, default=BatchStatus.IN_SERVICE)
 
     article = models.ForeignKey('articles.Article', on_delete=models.PROTECT, related_name='batches')
     supplier = models.ForeignKey('suppliers.Supplier', on_delete=models.SET_NULL, null=True, blank=True, related_name='batches')

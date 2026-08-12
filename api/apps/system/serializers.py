@@ -20,10 +20,12 @@ class BrandingSerializer(serializers.Serializer):
         return obj.effective_name
 
     def get_default_name(self, obj):
+        if getattr(obj, "restaurant_id", None):
+            return obj.restaurant.name
         return django_settings.DEFAULT_RESTAURANT_NAME
 
     def get_is_custom(self, obj):
-        return bool(obj.restaurant_name)
+        return bool(obj.restaurant_name and obj.restaurant_name.strip())
 
     def get_session_idle_minutes(self, obj):
         return int(django_settings.SESSION_IDLE_TIMEOUT.total_seconds() // 60)

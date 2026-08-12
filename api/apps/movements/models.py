@@ -13,6 +13,11 @@ class MovementType(models.TextChoices):
 
 
 class Movement(models.Model):
+    restaurant = models.ForeignKey(
+        'restaurants.Restaurant',
+        on_delete=models.CASCADE,
+        related_name='movements',
+    )
     type = models.CharField(max_length=20, choices=MovementType.choices)
     quantity = models.PositiveIntegerField()
     motive = models.CharField(max_length=255, null=True, blank=True)

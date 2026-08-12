@@ -1,7 +1,12 @@
 from django.db import models
 
 class Supplier(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+    restaurant = models.ForeignKey(
+        'restaurants.Restaurant',
+        on_delete=models.CASCADE,
+        related_name='suppliers',
+    )
+    name = models.CharField(max_length=100)
     phone = models.CharField(max_length=20, null=True, blank=True)
 
     # WHY: the frontend supplier sheet shows a contact person, an email and an
@@ -15,3 +20,4 @@ class Supplier(models.Model):
 
     class Meta:
         db_table = 'suppliers'
+        unique_together = (('restaurant', 'name'),)

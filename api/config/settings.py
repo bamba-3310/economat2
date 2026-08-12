@@ -53,6 +53,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    # Multi-tenant restaurants (Le Carré / Bahia FC) — must load before apps
+    # that FK to Restaurant.
+    'apps.restaurants',
     'apps.accounts',
     'apps.categories',
     'apps.suppliers',
@@ -104,6 +107,9 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Resolve request.restaurant from Host / X-Restaurant-Slug (after auth so
+    # login can still run; membership is checked in views).
+    'apps.restaurants.middleware.RestaurantTenantMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -183,16 +189,15 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-
-# Authorize React
-# WHEN/WHY: the frontend moved from Vite (5173) to Next.js. The Next.js dev
-# server (3000) and the chosen preview port (3144) are allowed so the browser /
-# adapter routes can call this API. 5173 kept for backward compatibility.
+# Authorize React / Next origins. Comma-separated CORS_ALLOWED_ORIGINS overrides
+# the localhost defaults (production: https://lecarre.kovo-app.net,...).
+_default_cors = "http://localhost:5173,http://localhost:3000,http://localhost:3144"
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://localhost:3144",
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", _default_cors).split(",")
+    if origin.strip()
 ]
 
 from datetime import timedelta

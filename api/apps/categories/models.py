@@ -13,7 +13,12 @@ class CategoryMode(models.TextChoices):
 
 
 class Category(models.Model):
-    name = models.CharField(max_length=50, unique=True)
+    restaurant = models.ForeignKey(
+        'restaurants.Restaurant',
+        on_delete=models.CASCADE,
+        related_name='categories',
+    )
+    name = models.CharField(max_length=50)
 
     # --- New rule fields (see WHY/WHEN above) ---
     mode = models.CharField(max_length=20, choices=CategoryMode.choices, default=CategoryMode.STANDARD)
@@ -25,3 +30,4 @@ class Category(models.Model):
 
     class Meta:
         db_table = 'categories'
+        unique_together = (('restaurant', 'name'),)

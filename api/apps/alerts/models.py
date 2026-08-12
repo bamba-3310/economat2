@@ -6,6 +6,11 @@ class AlertType(models.TextChoices):
 
 
 class Alert(models.Model):
+    restaurant = models.ForeignKey(
+        'restaurants.Restaurant',
+        on_delete=models.CASCADE,
+        related_name='alerts',
+    )
     type = models.CharField(max_length=20, choices=AlertType.choices)
     message = models.CharField(max_length=255)
     read = models.BooleanField(default=False)

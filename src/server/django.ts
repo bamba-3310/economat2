@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 /**
  * Server-side client for the Django REST API (the single source of truth,
@@ -11,24 +11,28 @@ import { cookies } from "next/headers";
  * the frontend domain shape. WHEN: added when wiring the app to Django/Postgres.
  */
 
-// WHEN/WHY: use 127.0.0.1 (IPv4) rather than "localhost". Node resolves
-// "localhost" to IPv6 ::1 first, but Django's runserver listens on IPv4 only,
-// so server-side fetches to localhost intermittently failed with ECONNREFUSED
-// (random 500s on /api/stock, /api/suppliers, ...). Forcing IPv4 fixes it.
 const DJANGO_URL = (process.env.DJANGO_API_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
 
 const ACCESS_COOKIE = "lc_access";
 const REFRESH_COOKIE = "lc_refresh";
 
-// WHEN/WHY: the auth cookies are intentionally *session-scoped* (no maxAge /
-// expires). The browser drops them when it is fully closed, so closing the
-// window / quitting the app logs the user out on the next open — while a plain
-// page reload (browser still running) keeps them, so refreshing does NOT log
-// you out. The JWTs still carry their own server-side lifetimes (8h / 7d in
-// SIMPLE_JWT); the cookie scope only controls how long the *browser* holds them.
+const KNOWN_SLUGS = new Set(["lecarre", "bahiafc"]);
+
+/** Resolve tenant slug from Host (lecarre.kovo-app.net) or env default. */
+export function slugFromHost(host: string | null | undefined): string {
+  const raw = (host ?? "").split(":")[0].trim().toLowerCase();
+  const first = raw.split(".")[0];
+  if (KNOWN_SLUGS.has(first)) return first;
+  return (process.env.DEFAULT_RESTAURANT_SLUG ?? "lecarre").trim().toLowerCase() || "lecarre";
+}
+
+export async function currentRestaurantSlug(): Promise<string> {
+  const h = await headers();
+  return slugFromHost(h.get("host"));
+}
+
 export async function setAuthCookies(access: string, refresh: string) {
   const store = await cookies();
-  // No maxAge -> session cookie.
   const base = { httpOnly: true, sameSite: "lax" as const, path: "/" };
   store.set(ACCESS_COOKIE, access, base);
   store.set(REFRESH_COOKIE, refresh, base);
@@ -50,21 +54,24 @@ export type DjangoResult<T> = {
   data: T;
 };
 
+async function tenantHeaders(): Promise<Record<string, string>> {
+  const slug = await currentRestaurantSlug();
+  return { "X-Restaurant-Slug": slug };
+}
+
 async function rawFetch<T>(path: string, init: RequestInit, token?: string): Promise<DjangoResult<T>> {
+  const restaurantHeaders = await tenantHeaders();
   const requestInit: RequestInit = {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...restaurantHeaders,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },
     cache: "no-store",
   };
 
-  // WHEN/WHY: readDatabase() fans out ~8 parallel calls; Django's dev server can
-  // reset some connections under that burst (ECONNRESET). Retry transient
-  // network failures once, and NEVER throw — return ok:false so the caller (e.g.
-  // Promise.all in readDatabase) degrades gracefully instead of 500-ing.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const response = await fetch(`${DJANGO_URL}${path}`, requestInit);
@@ -80,7 +87,6 @@ async function rawFetch<T>(path: string, init: RequestInit, token?: string): Pro
   return { ok: false, status: 0, data: null as T };
 }
 
-/** Try to mint a fresh access token from the refresh cookie. Returns it or undefined. */
 async function tryRefresh(): Promise<string | undefined> {
   const refresh = (await cookies()).get(REFRESH_COOKIE)?.value;
   if (!refresh) return undefined;
@@ -92,7 +98,6 @@ async function tryRefresh(): Promise<string | undefined> {
 
   if (result.ok && result.data?.access) {
     const store = await cookies();
-    // Session-scoped, matching setAuthCookies (see note there).
     store.set(ACCESS_COOKIE, result.data.access, {
       httpOnly: true,
       sameSite: "lax",
@@ -104,10 +109,6 @@ async function tryRefresh(): Promise<string | undefined> {
   return undefined;
 }
 
-/**
- * Authenticated call to Django using the user's cookie token, with one
- * automatic refresh-and-retry on a 401.
- */
 export async function djangoFetch<T = unknown>(
   path: string,
   init: RequestInit = {},
@@ -125,7 +126,6 @@ export async function djangoFetch<T = unknown>(
   return result;
 }
 
-/** Unauthenticated call (login / register / token refresh). */
 export function djangoPublicFetch<T = unknown>(path: string, init: RequestInit = {}) {
   return rawFetch<T>(path, init);
 }

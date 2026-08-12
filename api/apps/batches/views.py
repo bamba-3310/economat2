@@ -9,6 +9,8 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Batch
 from .serializers import BatchSerializer
 from apps.permissions import HasAnyAppPermission
+from apps.restaurants.tenancy import assert_restaurant_member, for_restaurant, get_tenant_object_or_404
+
 
 class BatchListCreateView(APIView):
     def get_permissions(self):
@@ -17,24 +19,20 @@ class BatchListCreateView(APIView):
         return [IsAuthenticated()]
 
     def get(self, request):
-        """List all batches (all connected)"""
-        batches = Batch.objects.all().order_by('received_at')
+        assert_restaurant_member(request)
+        batches = for_restaurant(Batch.objects.all(), request).order_by('received_at')
         return Response(BatchSerializer(batches, many=True).data)
 
     def post(self, request):
-        """Create a batch (admin, or validate_deliveries/edit_lots holder)"""
+        restaurant = assert_restaurant_member(request)
         serializer = BatchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         article = serializer.validated_data['article']
+        if article.restaurant_id != restaurant.id:
+            return Response({'detail': 'Article not in this restaurant'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Calculates expiry_date automatically if the article has a conservation
-        # duration and the caller didn't provide one.
-        # WHEN/WHY: this block previously crashed with a NameError
-        # (timezone/timedelta were never imported) and, once computed, `extra`
-        # was silently discarded — serializer.save() was called without it, so
-        # the auto-expiry feature never worked on this path. Both fixed.
-        extra = {}
+        extra = {'restaurant': restaurant}
         if article.shelf_life_days and not serializer.validated_data.get('expiry_date'):
             extra['expiry_date'] = timezone.now().date() + timedelta(days=article.shelf_life_days)
 
@@ -43,9 +41,6 @@ class BatchListCreateView(APIView):
 
 
 class BatchDetailView(APIView):
-    # WHEN/WHY: was IsAdminOrEconome, which 403'd cooks holding granular stock
-    # rights (the frontend checks edit_lots/edit_stock/edit_expiration_dates for
-    # these operations). Now mirrors the frontend's permission model.
     def get_permissions(self):
         if self.request.method == 'DELETE':
             return [IsAuthenticated(), HasAnyAppPermission('edit_lots')]
@@ -55,21 +50,15 @@ class BatchDetailView(APIView):
         ]
 
     def patch(self, request, pk):
-        """Update a batch"""
-        try:
-            batch = Batch.objects.get(pk=pk)
-        except Batch.DoesNotExist:
-            return Response({'detail': 'Batch not found'}, status=status.HTTP_404_NOT_FOUND)
+        assert_restaurant_member(request)
+        batch = get_tenant_object_or_404(Batch, request, pk=pk)
         serializer = BatchSerializer(batch, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         batch = serializer.save()
         return Response(BatchSerializer(batch).data)
 
     def delete(self, request, pk):
-        """Delete a batch"""
-        try:
-            batch = Batch.objects.get(pk=pk)
-        except Batch.DoesNotExist:
-            return Response({'detail': 'Batch not found'}, status=status.HTTP_404_NOT_FOUND)
+        assert_restaurant_member(request)
+        batch = get_tenant_object_or_404(Batch, request, pk=pk)
         batch.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

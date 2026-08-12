@@ -15,6 +15,7 @@ from apps.suppliers.models import Supplier
 from apps.batches.models import Batch, BatchStatus
 from apps.movements.models import Movement, MovementType
 from apps.alerts.utils import check_stock_threshold
+from apps.restaurants.tenancy import assert_restaurant_member, for_restaurant
 from .models import Delivery, DeliveryStatus
 from .serializers import DeliverySerializer
 
@@ -28,24 +29,20 @@ def _parse_expiry(raw_expiry):
     return None
 
 
-# WHY: validating a delivery must atomically create one batch + one entry
-# movement per line (and the article if it is new), bump the article stock, and
-# persist the delivery header. Putting this server-side keeps it in a single DB
-# transaction. WHEN: added during the PostgreSQL/Django wiring.
 class DeliveryListCreateView(APIView):
     def get_permissions(self):
         if self.request.method == 'POST':
-            # WHEN/WHY: was IsAdminOrEconome; now mirrors the frontend's
-            # granular 'validate_deliveries' right (admins always pass).
             return [IsAuthenticated(), HasAnyAppPermission('validate_deliveries')]
         return [IsAuthenticated()]
 
     def get(self, request):
-        deliveries = Delivery.objects.all().order_by('-created_at')
+        assert_restaurant_member(request)
+        deliveries = for_restaurant(Delivery.objects.all(), request).order_by('-created_at')
         return Response(DeliverySerializer(deliveries, many=True).data)
 
     @transaction.atomic
     def post(self, request):
+        restaurant = assert_restaurant_member(request)
         data = request.data
         reference = data.get('reference')
         lines = data.get('lines') or []
@@ -58,16 +55,8 @@ class DeliveryListCreateView(APIView):
         supplier = None
         supplier_id = data.get('supplier')
         if supplier_id:
-            supplier = Supplier.objects.filter(pk=supplier_id).first()
+            supplier = Supplier.objects.filter(pk=supplier_id, restaurant=restaurant).first()
 
-        # ---- Phase 1: validate and resolve EVERY line before writing anything.
-        # WHEN/WHY: the original loop created batches/movements/stock bumps as it
-        # went and then `return Response(400)` on the first invalid line — but
-        # @transaction.atomic only rolls back on exceptions, so the earlier
-        # lines' writes were COMMITTED while the client saw an error (a retry
-        # then duplicated them). It also crashed with an unhandled ValueError on
-        # a non-numeric quantity and accepted 0-quantity lines. All writes now
-        # happen only after the whole payload has validated.
         resolved_lines = []
         for index, line in enumerate(lines, start=1):
             try:
@@ -86,14 +75,14 @@ class DeliveryListCreateView(APIView):
             article = None
             category = None
             if line.get('article'):
-                article = Article.objects.filter(pk=line['article']).first()
+                article = Article.objects.filter(pk=line['article'], restaurant=restaurant).first()
                 if article is None:
                     return Response(
                         {'detail': f'line {index}: unknown article'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
             elif line.get('product_name'):
-                category = Category.objects.filter(pk=line.get('category')).first()
+                category = Category.objects.filter(pk=line.get('category'), restaurant=restaurant).first()
                 if category is None:
                     return Response(
                         {'detail': 'a valid category is required to create a new article'},
@@ -118,7 +107,6 @@ class DeliveryListCreateView(APIView):
                 'line': line,
             })
 
-        # ---- Phase 2: all lines are valid — perform the writes.
         snapshot = []
         for entry in resolved_lines:
             line = entry['line']
@@ -127,6 +115,7 @@ class DeliveryListCreateView(APIView):
 
             if article is None:
                 article, _ = Article.objects.get_or_create(
+                    restaurant=restaurant,
                     name=line['product_name'],
                     defaults={
                         'category': entry['category'],
@@ -135,27 +124,24 @@ class DeliveryListCreateView(APIView):
                     },
                 )
 
-            # Expiry: explicit value, else derived from the article shelf life.
-            # Parsed to a real date object — passing a raw string to create()
-            # leaves the in-memory instance's expiry_date as a str, which later
-            # broke `.isoformat()` (AttributeError on the snapshot below).
             expiry = _parse_expiry(line.get('expiry_date'))
             if not expiry and article.shelf_life_days:
                 expiry = timezone.now().date() + timedelta(days=article.shelf_life_days)
 
+            # Auto-activate: lots are created already in service (no manual step).
             batch = Batch.objects.create(
+                restaurant=restaurant,
                 article=article,
                 supplier=supplier,
                 quantity=quantity,
                 initial_quantity=quantity,
                 code=line.get('lot_code') or None,
                 expiry_date=expiry,
-                status=BatchStatus.RESERVE,
+                status=BatchStatus.IN_SERVICE,
             )
 
-            # Entry movement + stock bump (done inline since we are already in a
-            # transaction and not going through the movement view).
             Movement.objects.create(
+                restaurant=restaurant,
                 article=article, batch=batch,
                 user=request.user, user_name=request.user.name,
                 type=MovementType.ENTRY, quantity=quantity, motive=reference,
@@ -175,8 +161,8 @@ class DeliveryListCreateView(APIView):
             })
 
         delivery = Delivery.objects.create(
+            restaurant=restaurant,
             reference=reference,
-            # Parsed leniently: an unparseable date becomes None instead of a 500.
             delivered_at=_parse_expiry(data.get('delivered_at')),
             status=DeliveryStatus.VALIDATED,
             validated_by=request.user,

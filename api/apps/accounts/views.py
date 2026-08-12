@@ -20,6 +20,8 @@ from .serializers import (
     SelfUpdateSerializer,
 )
 from apps.permissions import IsAdmin
+from apps.restaurants.models import RestaurantMembership
+from apps.restaurants.tenancy import assert_restaurant_member, require_restaurant, user_belongs_to
 
 
 def _issue_session_tokens(user):
@@ -41,8 +43,6 @@ def _issue_session_tokens(user):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
-    # WHEN/WHY: no throttling meant unlimited credential guessing. Scoped rates
-    # live in settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'].
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'login'
 
@@ -50,11 +50,8 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # WHEN/WHY: emails are stored lowercased (registration normalizes them)
-        # but login used an exact-match get(), so typing John@X.com for a stored
-        # john@x.com returned 401. Case-insensitive lookup fixes both fresh and
-        # legacy mixed-case rows; order_by('id').first() keeps it deterministic
-        # if historic duplicates differing only in case exist.
+        restaurant = require_restaurant(request)
+
         user = (
             User.objects
             .filter(email__iexact=serializer.validated_data['email'])
@@ -64,28 +61,25 @@ class LoginView(APIView):
         if user is None or not user.check_password(serializer.validated_data['password']):
             return Response({'detail': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # WHEN/WHY: the original only checked is_active. With the new account
-        # workflow we also reject non-active statuses and return the status code
-        # so the frontend can show the right message (pending/rejected/disabled).
         if user.status != UserStatus.ACTIVE or not user.is_active:
             return Response(
                 {'detail': 'Account not active', 'status': user.status},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # WHEN/WHY: single active session, takeover semantics. The newest login
-        # always wins: we mint a fresh session id and overwrite any existing one,
-        # so the previous session's token (whose `sid` no longer matches) is
-        # invalidated on its next request (see SessionJWTAuthentication). This
-        # guarantees a user can always log in again — a closed browser or a
-        # killed server can no longer lock the account out. Idle sessions also
-        # free themselves after SESSION_IDLE_TIMEOUT.
+        if not user_belongs_to(user, restaurant):
+            return Response(
+                {'detail': 'Not a member of this restaurant'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         refresh = _issue_session_tokens(user)
 
         return Response({
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'user': UserSerializer(user).data,
+            'restaurant': {'id': restaurant.id, 'slug': restaurant.slug, 'name': restaurant.name},
         })
 
 
@@ -93,15 +87,16 @@ class UserListCreateView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
     def get(self, request):
-        """List all users (Admin only)"""
-        users = User.objects.all().order_by('name')
+        restaurant = assert_restaurant_member(request)
+        users = User.objects.filter(memberships__restaurant=restaurant).distinct().order_by('name')
         return Response(UserSerializer(users, many=True).data)
 
     def post(self, request):
-        """Create a user (Admin only)"""
+        restaurant = assert_restaurant_member(request)
         serializer = CreateUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        RestaurantMembership.objects.get_or_create(user=user, restaurant=restaurant)
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
@@ -109,8 +104,9 @@ class UserDetailView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
 
     def patch(self, request, pk):
+        restaurant = assert_restaurant_member(request)
         try:
-            user = User.objects.get(pk=pk)
+            user = User.objects.get(pk=pk, memberships__restaurant=restaurant)
         except User.DoesNotExist:
             return Response({'detail': 'User does not exist'}, status=status.HTTP_404_NOT_FOUND)
         serializer = UpdateUserSerializer(user, data=request.data, partial=True)
@@ -120,18 +116,18 @@ class UserDetailView(APIView):
 
     def delete(self, request, pk):
         """Delete a user (Admin only, except oneself)"""
+        restaurant = assert_restaurant_member(request)
         if request.user.pk == pk:
-            return  Response({'detail': 'You cannot delete yourself'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'You cannot delete yourself'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user = User.objects.get(pk=pk)
+            user = User.objects.get(pk=pk, memberships__restaurant=restaurant)
         except User.DoesNotExist:
             return Response({'detail': 'User does not exist'}, status=status.HTTP_404_NOT_FOUND)
-        # WHEN/WHY: Movement.user used to be PROTECT, so this raised an
-        # unhandled ProtectedError (HTTP 500) for any user with recorded
-        # movements — account deletion never worked in practice. Movement.user
-        # is now SET_NULL; the guard stays so any future protected reference
-        # surfaces as a clean 400 instead of a 500.
+        # Remove membership for this restaurant; delete account if orphaned.
+        RestaurantMembership.objects.filter(user=user, restaurant=restaurant).delete()
+        if user.memberships.exists():
+            return Response(status=status.HTTP_204_NO_CONTENT)
         try:
             user.delete()
         except ProtectedError:
@@ -226,6 +222,7 @@ class RegisterView(APIView):
     throttle_scope = 'register'
 
     def post(self, request):
+        restaurant = require_restaurant(request)
         data = {
             'name': request.data.get('name'),
             'email': request.data.get('email'),
@@ -238,7 +235,8 @@ class RegisterView(APIView):
         }
         serializer = CreateUserSerializer(data=data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        user = serializer.save()
+        RestaurantMembership.objects.get_or_create(user=user, restaurant=restaurant)
         return Response(
             {'detail': 'Account requested', 'status': UserStatus.PENDING},
             status=status.HTTP_201_CREATED,

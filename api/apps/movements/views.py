@@ -10,11 +10,8 @@ from .serializers import MovementSerializer
 from apps.permissions import user_has_any_permission
 from apps.articles.models import Article
 from apps.batches.models import Batch, BatchStatus
+from apps.restaurants.tenancy import assert_restaurant_member, for_restaurant, get_tenant_object_or_404
 
-# WHEN/WHY: POST used to require IsAdminOrEconome for every movement type, which
-# blocked cooks (Agents) from the scan flow even though the frontend grants them
-# 'edit_stock'/'activate_lot'. The required right now depends on the movement
-# type, checked against the user's effective permissions (admins always pass).
 REQUIRED_PERMISSIONS_BY_TYPE = {
     'entry': ('validate_deliveries', 'edit_stock'),
     'kitchen_exit': ('edit_stock',),
@@ -29,8 +26,8 @@ class MovementListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """List all movements, can filter by article (all connected)"""
-        movements = Movement.objects.all().order_by('-created_at')
+        assert_restaurant_member(request)
+        movements = for_restaurant(Movement.objects.all(), request).order_by('-created_at')
 
         article_id = request.query_params.get('article')
         if article_id:
@@ -38,18 +35,9 @@ class MovementListCreateView(APIView):
 
         return Response(MovementSerializer(movements, many=True).data)
 
-    @transaction.atomic     # if a step fails, all of it is canceled
+    @transaction.atomic
     def post(self, request):
-        """Create a movement and update the stock (and its batch) atomically.
-
-        WHEN/WHY: the web adapter and the mobile app used to follow a movement
-        POST with a separate batch PATCH computed from a stale snapshot — two
-        concurrent scanners on the same lot could lose an update, and a failure
-        between the two calls left article stock and batch quantity out of sync.
-        The batch side-effect (quantity decrement on exits, status flip on
-        activation, absolute reset on corrections) now happens HERE, in the same
-        transaction, with both rows locked.
-        """
+        restaurant = assert_restaurant_member(request)
         serializer = MovementSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -63,14 +51,23 @@ class MovementListCreateView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        article = Article.objects.select_for_update().get(
-            pk=serializer.validated_data['article'].id
-        )
+        try:
+            article = Article.objects.select_for_update().get(
+                pk=serializer.validated_data['article'].id,
+                restaurant=restaurant,
+            )
+        except Article.DoesNotExist:
+            return Response({'detail': 'Article not found'}, status=status.HTTP_404_NOT_FOUND)
+
         batch = None
         if serializer.validated_data.get('batch') is not None:
-            batch = Batch.objects.select_for_update().get(
-                pk=serializer.validated_data['batch'].id
-            )
+            try:
+                batch = Batch.objects.select_for_update().get(
+                    pk=serializer.validated_data['batch'].id,
+                    restaurant=restaurant,
+                )
+            except Batch.DoesNotExist:
+                return Response({'detail': 'Batch not found'}, status=status.HTTP_404_NOT_FOUND)
 
         if movement_type == 'entry':
             article.stock_quantity += quantity
@@ -79,6 +76,14 @@ class MovementListCreateView(APIView):
                 batch.quantity += quantity
                 batch.save()
         elif movement_type in ('kitchen_exit', 'loss', 'deletion'):
+            # Legacy reserve lots: auto-activate on first kitchen exit.
+            if (
+                movement_type == 'kitchen_exit'
+                and batch is not None
+                and batch.status == BatchStatus.RESERVE
+            ):
+                batch.status = BatchStatus.IN_SERVICE
+                batch.save(update_fields=['status'])
             if article.stock_quantity < quantity:
                 return Response(
                     {'detail': f'Move not enough stock. Available stock is {article.stock_quantity}'},
@@ -95,15 +100,10 @@ class MovementListCreateView(APIView):
                 batch.quantity -= quantity
                 batch.save()
         elif movement_type == 'activation':
-            # No quantity change: activating flips the lot reserve -> in service.
             if batch is not None:
                 batch.status = BatchStatus.IN_SERVICE
                 batch.save()
         elif movement_type == 'correction':
-            # Optional absolute reset: `corrected_quantity` is the new batch
-            # quantity; the article stock absorbs the real delta. `quantity`
-            # stays what the caller logged (the absolute value of the intended
-            # delta) for the audit trail.
             corrected = request.data.get('corrected_quantity')
             if batch is not None and corrected is not None:
                 try:
@@ -124,11 +124,12 @@ class MovementListCreateView(APIView):
                 article.stock_quantity = max(0, article.stock_quantity + delta)
                 article.save()
 
-        # Inject the connected user automatically (+ a name snapshot so the
-        # history keeps the author even after the account is deleted).
-        movement = serializer.save(user=request.user, user_name=request.user.name)
+        movement = serializer.save(
+            restaurant=restaurant,
+            user=request.user,
+            user_name=request.user.name,
+        )
 
-        # Check the threshold after each movement
         check_stock_threshold(article)
 
         return Response(MovementSerializer(movement).data, status=status.HTTP_201_CREATED)
@@ -138,9 +139,6 @@ class MovementDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        """Movement detail"""
-        try:
-            movement = Movement.objects.get(pk=pk)
-        except Movement.DoesNotExist:
-            return Response({'detail': 'Move not found'}, status=status.HTTP_404_NOT_FOUND)
+        assert_restaurant_member(request)
+        movement = get_tenant_object_or_404(Movement, request, pk=pk)
         return Response(MovementSerializer(movement).data)

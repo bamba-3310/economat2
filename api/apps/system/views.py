@@ -13,13 +13,13 @@ from apps.alerts.models import Alert
 from apps.categories.models import Category
 from apps.suppliers.models import Supplier
 from apps.deliveries.models import Delivery
+from apps.restaurants.models import RestaurantMembership
+from apps.restaurants.tenancy import assert_restaurant_member, require_restaurant
 
 from .models import Branding
 from .serializers import BrandingSerializer
 
 
-# GET is public so the login screen (pre-auth) can show the restaurant name.
-# PATCH is admin-only (set a custom name, or restore the default).
 class BrandingView(APIView):
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -27,12 +27,12 @@ class BrandingView(APIView):
         return [IsAuthenticated(), IsAdmin()]
 
     def get(self, request):
-        return Response(BrandingSerializer(Branding.get_solo()).data)
+        restaurant = require_restaurant(request)
+        return Response(BrandingSerializer(Branding.for_restaurant(restaurant)).data)
 
     def patch(self, request):
-        branding = Branding.get_solo()
-        # restore=true clears the override -> effective_name falls back to the
-        # default in settings.DEFAULT_RESTAURANT_NAME.
+        restaurant = assert_restaurant_member(request)
+        branding = Branding.for_restaurant(restaurant)
         if request.data.get('restore'):
             branding.restaurant_name = ''
         else:
@@ -44,25 +44,42 @@ class BrandingView(APIView):
         return Response(BrandingSerializer(branding).data)
 
 
-# WHY: a "start fresh" action for reuse / handover. Deletes all operational data
-# and every non-admin account, but keeps admin accounts (so nobody is locked
-# out) and the branding row. Admin-only and run in a single transaction.
 class WipeDatabaseView(APIView):
+    """Wipe operational data for the current restaurant only."""
+
     permission_classes = [IsAuthenticated, IsAdmin]
 
     @transaction.atomic
     def post(self, request):
-        Movement.objects.all().delete()
-        Alert.objects.all().delete()
-        Delivery.objects.all().delete()
-        Batch.objects.all().delete()
-        Article.objects.all().delete()
-        Supplier.objects.all().delete()
-        Category.objects.all().delete()
-        removed, _ = User.objects.exclude(role=UserRole.ADMIN).delete()
-        admins_kept = User.objects.filter(role=UserRole.ADMIN).count()
+        restaurant = assert_restaurant_member(request)
+
+        Movement.objects.filter(restaurant=restaurant).delete()
+        Alert.objects.filter(restaurant=restaurant).delete()
+        Delivery.objects.filter(restaurant=restaurant).delete()
+        Batch.objects.filter(restaurant=restaurant).delete()
+        Article.objects.filter(restaurant=restaurant).delete()
+        Supplier.objects.filter(restaurant=restaurant).delete()
+        Category.objects.filter(restaurant=restaurant).delete()
+
+        # Remove non-admin memberships for this restaurant. Delete the user
+        # entirely only when they have no remaining memberships.
+        memberships = RestaurantMembership.objects.filter(
+            restaurant=restaurant,
+        ).exclude(user__role=UserRole.ADMIN)
+        user_ids = list(memberships.values_list('user_id', flat=True))
+        memberships.delete()
+        removed = 0
+        for user in User.objects.filter(pk__in=user_ids).exclude(role=UserRole.ADMIN):
+            if not user.memberships.exists():
+                user.delete()
+                removed += 1
+
+        admins_kept = RestaurantMembership.objects.filter(
+            restaurant=restaurant, user__role=UserRole.ADMIN
+        ).count()
         return Response({
-            'detail': 'Database wiped. Admin accounts kept.',
+            'detail': f'Database wiped for {restaurant.slug}. Admin memberships kept.',
             'removed_users': removed,
             'admins_kept': admins_kept,
+            'restaurant': restaurant.slug,
         })

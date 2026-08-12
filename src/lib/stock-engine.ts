@@ -304,9 +304,13 @@ export function evaluateLotScan({
       ? findOlderFefoLot({ lot, lots, today })
       : undefined;
   const expired = isLotExpired(lot, today) || lot.status === "Expiré";
-  const canActivate = lot.status === "En réserve" && !expired && !olderLot;
+  // Activation is automatic on delivery / first exit — no manual step required.
+  const canActivate = false;
   const canExit =
-    (lot.status === "En service" || lot.status === "Bientôt épuisé") && !expired;
+    (lot.status === "En service" ||
+      lot.status === "Bientôt épuisé" ||
+      lot.status === "En réserve") &&
+    !expired;
   const quantityError = quantityOut > lot.remainingQuantity;
 
   if (unknownScan) {
