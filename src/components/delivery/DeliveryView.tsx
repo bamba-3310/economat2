@@ -409,10 +409,6 @@ export default function DeliveryView({
         <section>
           <div className="flex items-center justify-between">
             <Eyebrow>{t("Lignes")}</Eyebrow>
-            <button type="button" className="btn btn-line btn-sm" onClick={onAddLine}>
-              <Plus size={14} strokeWidth={1.5} />
-              {t("Ajouter une ligne")}
-            </button>
           </div>
           <div className="rule mb-5 mt-3" />
           <div className="flex flex-col gap-4">
@@ -504,6 +500,14 @@ export default function DeliveryView({
                 </div>
               );
             })}
+          </div>
+
+          {/* Add line button moved to bottom of list for consistent UX */}
+          <div className="mt-4">
+            <button type="button" className="btn btn-line btn-sm" onClick={onAddLine}>
+              <Plus size={14} strokeWidth={1.5} />
+              {t("Ajouter une ligne")}
+            </button>
           </div>
 
           {/* Actions */}
