@@ -254,6 +254,70 @@ export default function DeliveryView({
     });
   }
 
+  async function handleExportPdf() {
+    if (queuedLabels.length === 0) return;
+
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import("html2canvas"),
+      import("jspdf"),
+    ]);
+
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "-10000px";
+    container.style.top = "0";
+    container.style.background = "#ffffff";
+    document.body.appendChild(container);
+
+    const nodes = Array.from(document.querySelectorAll(".qr-label")) as HTMLElement[];
+    if (nodes.length === 0) {
+      container.remove();
+      return;
+    }
+
+    const clones = nodes.map((node) => {
+      const clone = node.cloneNode(true) as HTMLElement;
+      clone.style.background = "#ffffff";
+      clone.style.width = "100%";
+      container.appendChild(clone);
+      return clone;
+    });
+
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const margin = 10;
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const usableWidth = pageWidth - margin * 2;
+
+    for (let index = 0; index < clones.length; index += 1) {
+      const element = clones[index];
+      const canvas = await html2canvas(element, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const imageProps = pdf.getImageProperties(imgData);
+      const imgWidthMm = usableWidth;
+      const imgHeightMm = (imageProps.height * imgWidthMm) / imageProps.width;
+
+      if (index > 0) {
+        pdf.addPage();
+      }
+
+      pdf.addImage(imgData, "PNG", margin, margin, imgWidthMm, imgHeightMm);
+    }
+
+    const fileKey =
+      (draft.reference || "livraison")
+        .replace(/[^a-z0-9-]+/gi, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+        .toLowerCase() || "livraison";
+
+    pdf.save(`le-carre-qr-${fileKey}.pdf`);
+    container.remove();
+  }
+
   function handleStartNew() {
     setValidationMessage("");
     setIsValidationError(false);
@@ -529,6 +593,15 @@ export default function DeliveryView({
             >
               <Download size={14} strokeWidth={1.5} />
               {t("Export CSV")}
+            </button>
+            <button
+              type="button"
+              className="btn btn-line btn-sm"
+              disabled={!canPrintLabels}
+              onClick={() => void handleExportPdf()}
+            >
+              <Download size={14} strokeWidth={1.5} />
+              {t("Export PDF")}
             </button>
             <button
               type="button"

@@ -75,17 +75,23 @@ function getProductCode(productName: string) {
   return (code || "LOT").toUpperCase();
 }
 
-/** Deterministic suggested lot code: `LC-<PROD>-<yymmdd>-<lineId>`. */
+/** Stable lot code: `LC-<PROD>`.
+ *
+ * We keep the reference stable across re-entries for the same product so the
+ * printed QR remains permanent and can be reused for scans (parity with
+ * EconomatProject behavior).
+ */
 export function createSuggestedLotCode({
   deliveredAt,
   lineId,
   productName,
 }: {
-  deliveredAt: string;
-  lineId: number;
+  deliveredAt?: string;
+  lineId?: number;
   productName: string;
 }) {
-  return `LC-${getProductCode(productName)}-${getDeliveryDateCode(deliveredAt)}-${lineId}`;
+  const base = `LC-${getProductCode(productName)}`;
+  return base;
 }
 
 export function escapeCsvCell(value: string | number) {
