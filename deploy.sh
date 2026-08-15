@@ -4,7 +4,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
-echo "==> git pull"
+# Check that we're on main branch
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$CURRENT_BRANCH" != "main" ]; then
+    echo "ERROR: Not on main branch. Current branch: $CURRENT_BRANCH"
+    echo "Deployment only allowed from main branch for production safety."
+    exit 1
+fi
+
+echo "==> git pull (main branch only)"
 git pull --ff-only
 
 echo "==> docker compose build"
