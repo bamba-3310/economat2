@@ -21,7 +21,8 @@ docker compose build
 echo "==> docker compose up -d"
 docker compose up -d
 
-echo "==> migrate / seed (api entrypoint already migrates; ensure seed)"
+echo "==> migrate / seed"
+docker compose exec -T api python manage.py migrate --noinput
 docker compose exec -T api python manage.py seed_restaurants || true
 
 echo "==> done"
