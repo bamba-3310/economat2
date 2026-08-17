@@ -407,13 +407,7 @@ export default function DeliveryView({
       {/* Lines (left) + QR (right) */}
       <div className="grid items-start gap-8 lg:grid-cols-[1.45fr_1fr]">
         <section>
-          <div className="flex items-center justify-between">
-            <Eyebrow>{t("Lignes")}</Eyebrow>
-            <button type="button" className="btn btn-line btn-sm" onClick={onAddLine}>
-              <Plus size={14} strokeWidth={1.5} />
-              {t("Ajouter une ligne")}
-            </button>
-          </div>
+          <Eyebrow>{t("Lignes")}</Eyebrow>
           <div className="rule mb-5 mt-3" />
           <div className="flex flex-col gap-4">
             {lines.map((line) => {
@@ -504,6 +498,13 @@ export default function DeliveryView({
                 </div>
               );
             })}
+          </div>
+
+          <div className="mt-4">
+            <button type="button" className="btn btn-line btn-sm" onClick={onAddLine}>
+              <Plus size={14} strokeWidth={1.5} />
+              {t("Ajouter une ligne")}
+            </button>
           </div>
 
           {/* Actions */}
