@@ -558,7 +558,7 @@ select.input optgroup {
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  z-index: 100;
+  z-index: 9999;
   max-height: 15rem;
   overflow-y: auto;
   background: var(--paper);
@@ -567,6 +567,7 @@ select.input optgroup {
   box-shadow: var(--shadow-soft);
   animation: menu-in var(--fast) var(--ease);
   scrollbar-width: thin;
+  min-width: 100%;
 }
 
 @keyframes menu-in {
@@ -580,7 +581,7 @@ select.input optgroup {
   padding: 0.7rem 0.85rem;
   border: none;
   border-bottom: 1px solid var(--line-soft);
-  background: transparent;
+  background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans), sans-serif;
   font-size: 0.9rem;
