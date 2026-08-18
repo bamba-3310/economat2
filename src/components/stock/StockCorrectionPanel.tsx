@@ -200,7 +200,7 @@ export default function StockCorrectionPanel({
 
       {/* Delete actions — remove an expired lot, or the whole product. */}
       {canEditLots || canEditStock ? (
-        <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
           {selectedLot && canEditLots ? (
             <button
               type="button"
@@ -221,7 +221,7 @@ export default function StockCorrectionPanel({
             <button
               type="button"
               disabled={isSyncing}
-              className="btn btn-line btn-sm"
+              className="btn btn-line btn-sm text-center"
               onClick={async () => {
                 if (!window.confirm(t("Supprimer ce produit ?"))) return;
                 const result = await deleteProduct({ productId: product.id });
