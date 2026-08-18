@@ -9,12 +9,57 @@ QR codes, and a consumption dashboard.
 - https://lecarre.kovo-app.net — Le Carré
 - https://bahiafc.kovo-app.net — Bahia FC
 
+**VPS Information:**
+- IP: `95.217.189.82`
+- SSH Access: `ssh bamba@95.217.189.82`
+- Deployment Path: `/opt/economat`
+
 See [DEPLOY.md](DEPLOY.md) and [update_acces_distant.md](update_acces_distant.md).
 The native Expo app is archived under `mobile_archive/` (tablets use the web
 camera scan).
 
 The UI is **bilingual (French / English)** — French is the canonical language
 (stored values and the i18n keys are French; English is a translation layer).
+
+## Démarrage rapide (Local Development)
+
+Pour lancer le serveur en local, suivez ces commandes une par une:
+
+### 1. Backend (Django API — port 8000)
+
+```bash
+cd api
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+cp .env.example .env
+# Éditez .env avec vos informations de base de données
+python manage.py migrate
+python manage.py runserver
+```
+
+### 2. Frontend (Next.js — port 3000)
+
+```bash
+# Dans un nouveau terminal
+npm install
+npm run dev
+```
+
+### 3. Créer l'admin local (une fois le backend lancé)
+
+```bash
+cd api
+.\venv\Scripts\Activate.ps1
+python manage.py shell -c "
+from apps.accounts.models import User
+User.objects.create_user(
+    email='admin@economat.sn',
+    name='Admin',
+    role='admin',
+    password='secret123',
+)"
+```
 
 ## Architecture at a glance
 
@@ -102,7 +147,28 @@ EconomatProject/
 - Python 3.12+
 - A running PostgreSQL instance
 
-## Setup & run
+## Admin Accounts
+
+**Production Admin Accounts:**
+- Email: `admin@kovo-app.net`
+- Password: `CHANGE_ME` (must be changed after first login)
+- Role: Admin with access to both restaurants
+- Created via Docker command on VPS
+
+**Local Development Admin:**
+```bash
+cd api
+python manage.py shell -c "
+from apps.accounts.models import User
+User.objects.create_user(
+    email='admin@economat.sn',
+    name='Admin',
+    role='admin',
+    password='secret123',
+)"
+```
+
+## Setup & run (Local Development)
 
 The two halves run as separate processes.
 
@@ -157,6 +223,128 @@ with the `DJANGO_API_URL` environment variable if Django runs elsewhere.
 which Django's dev server does not listen on.)
 
 CORS on the backend already allows ports `3000`, `3144`, and `5173`.
+
+## Remote Deployment & Updates
+
+### VPS Access
+
+```bash
+# SSH access to VPS
+ssh bamba@95.217.189.82
+
+# Navigate to project directory
+cd /opt/economat
+```
+
+### Remote Update Process
+
+To update the production server from your local machine:
+
+```bash
+# 1. Commit and push your changes locally
+git add .
+git commit -m "Your commit message"
+git push
+
+# 2. Trigger remote deployment via SSH
+ssh bamba@95.217.189.82 'cd /opt/economat && ./deploy.sh'
+```
+
+The `deploy.sh` script:
+- Pulls latest changes from git
+- Rebuilds Docker images
+- Restarts all services
+- Runs database migrations
+- Seeds restaurant data
+
+### Production Stack
+
+The production environment uses Docker Compose with:
+- **db**: PostgreSQL 16 (persistent volume)
+- **api**: Django REST API with Gunicorn
+- **web**: Next.js frontend
+- **caddy**: Reverse proxy with HTTPS (Let's Encrypt)
+
+Services are orchestrated via `docker-compose.yml` and Caddy handles SSL termination for both subdomains.
+
+### Server Access & Architecture
+
+**VPS Details:**
+- IP: `95.217.189.82`
+- Location: `/opt/economat`
+- Firewall: Ports 80, 443, 22 (SSH) open
+- Docker: All services containerized
+
+**Multi-tenant Architecture:**
+- Single codebase serves both restaurants
+- Tenant resolution via subdomain (Host header)
+- `lecarre.kovo-app.net` → Le Carré
+- `bahiafc.kovo-app.net` → Bahia FC
+- Data isolation at database level via `restaurant_id`
+
+## System Architecture & Logic
+
+### Overall Flow
+
+```
+Supplier Delivery → Validation → Batch Creation + Stock Entry
+                     ↓
+                Stock Update
+                     ↓
+           QR Code Generation/Scan
+                     ↓
+        Kitchen Consumption → Exit Movement
+                     ↓
+                Stock Update
+                     ↓
+     Threshold/Expiry Check → Alerts Generation
+                     ↓
+              Dashboard Display
+```
+
+### Core Components
+
+**Data Model:**
+- **Articles**: Products with name, category, unit, stock level, threshold, shelf life
+- **Batches**: Individual lots with quantity, code, status, expiry date
+- **Movements**: Stock transactions (entry, exit, activation, correction, loss)
+- **Alerts**: Automatic notifications for low stock and expiring products
+- **Deliveries**: Reception workflow that creates batches and entry movements
+
+**Business Logic:**
+- **FEFO (First Expired, First Out)**: Automatic prioritization of expiring batches
+- **Multi-lot management**: Multiple batches per product with different expiry dates
+- **Threshold alerts**: Low stock warnings configurable per category
+- **Expiry tracking**: Automatic alerts for products nearing or past expiration
+- **Auto-activation**: Batches automatically activated on delivery (reduces kitchen friction)
+
+**Tenant Isolation:**
+- All business data scoped to restaurant via `restaurant_id`
+- User membership required per restaurant
+- Separate branding per tenant
+- Complete data isolation at API level
+
+### Technology Stack
+
+**Frontend (Next.js):**
+- UI components organized by functional area
+- Real-time stock status calculations
+- QR code generation and scanning
+- Bilingual interface (FR/EN)
+- Responsive design with dark/light themes
+
+**Backend (Django):**
+- REST API with JWT authentication
+- Single session enforcement per user
+- Automatic session cleanup on inactivity
+- Membership-based access control
+- Database-level data validation
+
+**Infrastructure:**
+- Docker containerization
+- PostgreSQL persistent storage
+- Caddy reverse proxy with SSL
+- Multi-domain HTTPS support
 
 ## Authentication & roles
 
@@ -224,3 +412,45 @@ To hand the install over fresh, an admin can **wipe the database** under
 **Settings → Danger zone** (or `POST /api/system/wipe/`): this clears all
 operational data and non-admin accounts while keeping admin accounts and the
 branding. User avatars are stored on the account (`User.photo_url`) and persist.
+
+## Quick Reference
+
+### Production URLs
+- Le Carré: https://lecarre.kovo-app.net
+- Bahia FC: https://bahiafc.kovo-app.net
+
+### VPS Access
+- IP: `95.217.189.82`
+- SSH: `ssh bamba@95.217.189.82`
+- Path: `/opt/economat`
+
+### Admin Account
+- Email: `admin@kovo-app.net`
+- Password: `CHANGE_ME` (change after first login)
+- Access: Both restaurants
+
+### Update Command
+```bash
+ssh bamba@95.217.189.82 'cd /opt/economat && ./deploy.sh'
+```
+
+### Local Development
+```bash
+# Backend (Django)
+cd api
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver  # http://127.0.0.1:8000
+
+# Frontend (Next.js)
+npm install
+npm run dev  # http://localhost:3000
+```
+
+### Key Documentation
+- [DEPLOY.md](DEPLOY.md) - VPS deployment procedures
+- [update_acces_distant.md](update_acces_distant.md) - Remote access setup
+- [ARCHITECTURE_fr.md](ARCHITECTURE_fr.md) - Detailed architecture (French)
+- [api/curl_requests.md](api/curl_requests.md) - API examples
