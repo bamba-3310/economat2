@@ -109,7 +109,7 @@ export default function SemiCircleStock({
       <div className="semicircle-center pb-6">
         {selected ? (
           <>
-            <span className="max-w-[13rem] text-center text-[0.95rem] text-[var(--bg)] truncate">
+            <span className="max-w-[13rem] text-center text-[0.95rem] text-[var(--ink-soft)] truncate">
               {selected.name}
             </span>
             <span className="numeric mt-1 text-[3.1rem] leading-none">
