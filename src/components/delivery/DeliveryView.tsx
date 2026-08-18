@@ -56,6 +56,7 @@ export default function DeliveryView({
   const [supplierContact, setSupplierContact] = useState("");
   const [supplierMessage, setSupplierMessage] = useState("");
   const [isSupplierError, setIsSupplierError] = useState(false);
+  const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
   const [isValidationError, setIsValidationError] = useState(false);
   const [lastValidatedDelivery, setLastValidatedDelivery] = useState<Delivery | null>(
@@ -323,8 +324,8 @@ export default function DeliveryView({
                 <Select
                   value={draft.supplier}
                   onChange={(e) => onUpdateDraft({ supplier: e.target.value })}
+                  onToggle={(open) => setIsSupplierDropdownOpen(open)}
                 >
-                  <option value="">{t("Choisir un fournisseur")}</option>
                   {activeSuppliers.every((s) => s.name !== draft.supplier) &&
                   draft.supplier ? (
                     <option value={draft.supplier}>{draft.supplier}</option>
@@ -393,7 +394,7 @@ export default function DeliveryView({
       </section>
 
       {/* Summary band */}
-      <section className="grid grid-cols-2 gap-px overflow-hidden rounded-[3px] border border-[var(--line)] bg-[var(--line)] md:grid-cols-4">
+      <section className={`grid grid-cols-2 gap-px overflow-hidden rounded-[3px] border border-[var(--line)] bg-[var(--line)] md:grid-cols-4 transition-all duration-200 ${isSupplierDropdownOpen ? 'mt-28' : ''}`}>
         {summary.map((item) => (
           <div key={item.label} className="bg-[var(--bg-2)] px-5 py-5">
             <div className="text-[0.6rem] uppercase tracking-[0.18em] text-[var(--muted)]">

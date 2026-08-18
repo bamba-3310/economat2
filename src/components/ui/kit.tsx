@@ -277,7 +277,8 @@ export function Select({
   id,
   required,
   "aria-label": ariaLabel,
-}: SelectHTMLAttributes<HTMLSelectElement>) {
+  onToggle,
+}: SelectHTMLAttributes<HTMLSelectElement> & { onToggle?: (open: boolean) => void }) {
   const options = useMemo(() => extractSelectOptions(children), [children]);
   const isControlled = value !== undefined;
   const [uncontrolled, setUncontrolled] = useState(
@@ -288,6 +289,11 @@ export function Select({
   const [activeIndex, setActiveIndex] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
+
+  // Call onToggle callback when open state changes
+  useEffect(() => {
+    onToggle?.(open);
+  }, [open, onToggle]);
 
   const selected = options.find((option) => option.value === current);
   const label = selected?.label ?? (current || "—");
