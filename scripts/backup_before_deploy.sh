@@ -16,6 +16,7 @@ BACKUP_PATH="$BACKUP_DIR/backup_$TIMESTAMP"
 
 # Créer le répertoire de backup s'il n'existe pas
 mkdir -p "$BACKUP_DIR"
+mkdir -p "$BACKUP_PATH"
 
 echo "==> 1. Backup du code source"
 cp -r "$ROOT" "$BACKUP_PATH/code"
