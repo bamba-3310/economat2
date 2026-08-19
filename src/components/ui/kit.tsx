@@ -278,7 +278,7 @@ export function Select({
   required,
   "aria-label": ariaLabel,
   onToggle,
-}: SelectHTMLAttributes<HTMLSelectElement> & { onToggle?: (open: boolean) => void }) {
+}: Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onToggle'> & { onToggle?: (open: boolean) => void }) {
   const options = useMemo(() => extractSelectOptions(children), [children]);
   const isControlled = value !== undefined;
   const [uncontrolled, setUncontrolled] = useState(
