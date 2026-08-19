@@ -324,7 +324,7 @@ export default function DeliveryView({
                 <Select
                   value={draft.supplier}
                   onChange={(e) => onUpdateDraft({ supplier: e.target.value })}
-                  onToggle={(open) => setIsSupplierDropdownOpen(open)}
+                  onToggle={(open: boolean) => setIsSupplierDropdownOpen(open)}
                 >
                   {activeSuppliers.every((s) => s.name !== draft.supplier) &&
                   draft.supplier ? (
