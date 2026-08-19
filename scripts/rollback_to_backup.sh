@@ -4,6 +4,9 @@ set -euo pipefail
 # Script de rollback vers un backup précédent
 # À utiliser en cas de problème après déploiement
 
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
 if [ $# -ne 1 ]; then
     echo "Usage: $0 <backup_timestamp>"
     echo "Exemple: $0 20260818_143000"
@@ -32,12 +35,11 @@ if [ "$confirm" != "yes" ]; then
 fi
 
 echo "==> 1. Arrêt des services"
-cd /opt/economat
 docker compose down
 
 echo "==> 2. Restauration du code source"
-rm -rf /opt/economat/*
-cp -r "$BACKUP_PATH/code/"* /opt/economat/
+rm -rf "$ROOT"/*
+cp -r "$BACKUP_PATH/code/"* "$ROOT/"
 
 echo "==> 3. Restauration de la base de données"
 docker compose up -d db

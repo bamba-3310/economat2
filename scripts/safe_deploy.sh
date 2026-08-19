@@ -4,7 +4,7 @@ set -euo pipefail
 # Script de déploiement sécurisé avec backup automatique
 # À utiliser sur le VPS pour déploiement en production
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 echo "==> Déploiement sécurisé avec backup automatique"
@@ -34,7 +34,7 @@ echo "✓ Working directory propre"
 
 # 2. Backup automatique
 echo "==> 2. Backup automatique avant déploiement"
-./scripts/backup_before_deploy.sh
+"$ROOT/scripts/backup_before_deploy.sh"
 
 # 3. Mise à jour du code
 echo "==> 3. Mise à jour du code"
