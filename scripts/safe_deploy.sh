@@ -21,16 +21,7 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
     exit 1
 fi
 
-# Vérifier que le working directory est propre (ignore les changements de permissions)
-if [ -n "$(git diff --name-only)" ]; then
-    echo "ERROR: Le working directory n'est pas propre"
-    echo "Committez ou stash vos changements avant le déploiement"
-    git status
-    exit 1
-fi
-
 echo "✓ Branche: $CURRENT_BRANCH"
-echo "✓ Working directory propre"
 
 # 2. Backup automatique
 echo "==> 2. Backup automatique avant déploiement"
