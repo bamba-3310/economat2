@@ -30,7 +30,8 @@ Pour lancer le serveur en local, suivez ces commandes une par une:
 ```bash
 cd api
 python -m venv venv
-.\venv\Scripts\Activate.ps1
+.\venv\Scripts\Activate.ps1          # Windows
+# source venv/bin/activate          # Linux/Mac
 pip install -r requirements.txt
 cp .env.example .env
 # Éditez .env avec vos informations de base de données
@@ -46,11 +47,11 @@ npm install
 npm run dev
 ```
 
-### 3. Créer l'admin local (une fois le backend lancé)
+### 3. Créer l'admin local
+
+Une fois le backend lancé, exécutez dans le terminal `api/`:
 
 ```bash
-cd api
-.\venv\Scripts\Activate.ps1
 python manage.py shell -c "
 from apps.accounts.models import User
 User.objects.create_user(
@@ -110,6 +111,11 @@ EconomatProject/
 │       ├── alerts/            # low-stock & expiry alerts
 │       └── deliveries/        # delivery/receiving workflow (validation creates lots + entries)
 │
+├── scripts/                   # Deployment and maintenance scripts
+│   ├── backup_before_deploy.sh
+│   ├── rollback_to_backup.sh
+│   └── safe_deploy.sh
+│
 └── src/                       # Next.js frontend
     ├── app/
     │   ├── page.tsx           # root: data provider (Home) + TopBar + section router
@@ -168,37 +174,9 @@ User.objects.create_user(
 )"
 ```
 
-## Setup & run (Local Development)
+## Environment Configuration
 
-The two halves run as separate processes.
-
-### 1. Backend (Django API — port 8000)
-
-```bash
-cd api
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-cp .env.example .env              # then fill in the values (see below)
-python manage.py migrate
-python manage.py runserver        # http://127.0.0.1:8000
-```
-
-Create the first admin (run from `api/`, with the venv active):
-
-```bash
-python manage.py shell -c "
-from apps.accounts.models import User
-User.objects.create_user(
-    email='admin@economat.sn',
-    name='Admin',
-    role='admin',
-    password='secret123',
-)"
-```
-
-`api/.env` (see `api/.env.exemple`):
+`api/.env` (see `api/.env.example`):
 
 ```env
 SECRET_KEY=<your-django-secret>
@@ -208,13 +186,6 @@ DB_USER=...
 DB_PASSWORD=...
 DB_HOST=localhost
 DB_PORT=5432
-```
-
-### 2. Frontend (Next.js — port 3000, or 3144 for the preview config)
-
-```bash
-npm install
-npm run dev                       # http://localhost:3000
 ```
 
 The frontend talks to Django at `http://127.0.0.1:8000` by default. Override
@@ -236,10 +207,37 @@ ssh bamba@95.217.189.82
 cd /opt/economat
 ```
 
-### Remote Update Process
+### Safe Deployment with Backup
 
-To update the production server from your local machine:
+The project includes safety scripts for production deployment:
 
+**Backup before deployment** (`scripts/backup_before_deploy.sh`):
+- Creates complete backup of code, database, Docker volumes
+- Stores timestamped backups in `/opt/economat-backups/`
+- Keeps only the 5 most recent backups automatically
+
+**Safe deployment** (`scripts/safe_deploy.sh`):
+- Checks that you're on main branch with clean working directory
+- Runs automatic backup before deployment
+- Pulls latest changes, rebuilds Docker images
+- Restarts services, runs migrations
+- Verifies services are running correctly
+
+**Rollback** (`scripts/rollback_to_backup.sh`):
+- Restores application to a previous backup state
+- Useful if deployment causes issues
+- Quick recovery in case of problems
+
+### Deployment Process
+
+**Option 1: Safe deployment (recommended)**
+```bash
+# On VPS
+cd /opt/economat
+./scripts/safe_deploy.sh
+```
+
+**Option 2: Standard deployment**
 ```bash
 # 1. Commit and push your changes locally
 git add .
@@ -429,24 +427,19 @@ branding. User avatars are stored on the account (`User.photo_url`) and persist.
 - Password: `CHANGE_ME` (change after first login)
 - Access: Both restaurants
 
-### Update Command
+### Deployment Commands
 ```bash
+# Safe deployment (recommended)
+ssh bamba@95.217.189.82 'cd /opt/economat && ./scripts/safe_deploy.sh'
+
+# Standard deployment
 ssh bamba@95.217.189.82 'cd /opt/economat && ./deploy.sh'
-```
 
-### Local Development
-```bash
-# Backend (Django)
-cd api
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver  # http://127.0.0.1:8000
+# Manual backup
+ssh bamba@95.217.189.82 'cd /opt/economat && ./scripts/backup_before_deploy.sh'
 
-# Frontend (Next.js)
-npm install
-npm run dev  # http://localhost:3000
+# Rollback to backup
+ssh bamba@95.217.189.82 'cd /opt/economat && ./scripts/rollback_to_backup.sh <timestamp>'
 ```
 
 ### Key Documentation
