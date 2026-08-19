@@ -14,9 +14,10 @@ BACKUP_DIR="/opt/economat-backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_PATH="$BACKUP_DIR/backup_$TIMESTAMP"
 
-# Créer le répertoire de backup s'il n'existe pas
+# Créer le répertoire de backup s'il n'existe pas (en dehors du projet)
 mkdir -p "$BACKUP_DIR"
-mkdir -p "$BACKUP_PATH"
+mkdir -p "$BACKUP_PATH/code"
+mkdir -p "$BACKUP_PATH/volumes"
 
 echo "==> 1. Backup du code source"
 cp -r "$ROOT" "$BACKUP_PATH/code"
@@ -42,7 +43,7 @@ echo "==> Backup terminé: $BACKUP_PATH"
 echo "Taille du backup: $(du -sh "$BACKUP_PATH" | cut -f1)"
 
 # Garder seulement les 5 derniers backups
-cd "$BACKUP_DIR"
+cd /opt/economat-backups
 ls -t | tail -n +6 | xargs -r rm -rf
 
 echo "==> Nettoyage des anciens backups effectués (gardé les 5 derniers)"
